@@ -1,0 +1,188 @@
+6 мая 2005 г. - J2ME. Реализация Игры и графического Меню с использованием одного Canvas класса
+
+
+
+Еще год назад подавляющее большинство игр для телефонов использовали меню на основе форм - базового интерфейса телефона. Эти менюшки смотрелись убого и явно выбивались из игрового дизайна. Сейчас требования к играм существенно возросли, и пользователи требуют интересных графических решений. В этой статье я хочу рассказать вам о методе, который позволит вам разбить программу на два класса - игру и меню, и использовать только один класс canvas.
+
+Приведенный ниже метод с успехом применяется во всех наших играх. Он действительно работает.
+
+Для начала давайте посмотрим как выглядит типичный canvas класс игры:
+
+import javax.microedition.lcdui.*;
+
+public class MyCanvas extends Canvas implements Runnable {
+
+public MyCanvas(Midlet midlet) { // Конструктор
+    }
+
+public void run(){ 
+     try {
+       while (running) {
+        //Главный игровой цикл
+       }
+     }
+     catch(InterruptedException ie) { System.out.println(ie.toString()); }
+}
+protected void paint(Graphics g){ /* code */ }
+
+synchronized void start() { /* code */ }
+
+synchronized void stop() { /* code */ }
+
+public void keyPressed(int keyCode) { /* code */ }
+}
+
+Это довольно простое и распространенное переопределение canvas. Вероятно что-то подобное Вы уже использовали в своих играх. Давайте разобьем этот файл на два различных canvas класса - один для экранов меню и один для игры.
+
+Создадим два класса Menu.java и Game.java. Они осуществляют все те же функции, что и приведенный выше код. Заполним функции, необходимые для Canvas. Обратите внимание, и в ходе выполнения игры и в ходе работы с меню, программа выполняет одни и те же базовые функции, но с различным содержанием. Это позволяет нам оставить только один Canvas класс, и экспортировать различающиеся реализации извне. 
+
+public class Menu{
+   boolean isActive;
+
+   public static boolean isActive() { return isActive; }
+
+   public static void destroy() { /* удаляет все ненужное из памяти */ }
+
+   public static void initMenu() { /* инициализация первого меню*/ }
+
+  private static void initRest(){ /* инициализация остальной части меню */ }
+
+  public static void paint(Graphics g) { 
+     isActive = true;
+
+     drawMenuBackground(g);
+
+     switch (menuType) {
+         case 1: showMenuA(g); break;
+         case 2: showMenuB(g); break; 
+     }
+
+   }
+
+  public static void processKey(int keyCode, int GameActionKey) { /* обработка клавиш */   }
+} 
+
+public class Game {
+
+  boolean isActive;
+
+  public static boolean isActive() { return isActive; }
+
+  public static void destroy() { /* удаляем все лишнее */ }
+
+  public static void initGame() { /* инициализация игры */ }
+
+  public static void paint(Graphics g) { 
+    // игровое действие
+    isActive = true;
+   }
+
+   public static void processKey(int keyCode, int GameActionKey) { /* Обработка клавиш*/ }
+} 
+
+Функция любого из этих классов может корректно заменить функции MyCanvas.
+
+Теперь нам необходим код, который сообщит canvas-у какой из классов должен контролировать дисплей. Введем переменную типа boolean, которая будет индикатором текущего режима (ИГРА или МЕНЮ).
+
+Вот часть кода MyCanvas, которую мы использовали в нашей первой игре MotorDuels: Outcast. Этот класс переопределяет Canvas. Если Вы ориентируетесь на Nokia, то необходимо переопределять FullCanvas, что позволит вам использовать DirectGraphics. Это означает, что Вы должны будете передавать dg наряду с g в Game.paint() и Menu.paint().
+
+import javax.microedition.lcdui.*;
+
+public class MyCanvas extends Canvas implements Runnable {
+
+
+   private volatile Thread animationThread=null;
+
+   private static Graphics graphics;
+   private static boolean running;
+
+
+   public static boolean inMenu = true;
+   public static boolean doInit = true;
+
+   private static final int SLEEP = 5; 
+
+
+   public MyCanvas(MyGame mygame) {
+      buffer=Image.createImage(MyGame.canvasWidth, MyGame.canvasHeight);
+      graphics=buffer.getGraphics();
+   }
+
+
+   public void run(){ //main_game_loop
+      try {
+         while (running) {
+
+            if (doInit){
+               doInit=false;
+               if (inMenu) Menu.initMenu();
+               else Game.initGame();
+            }
+
+            if (inMenu) {
+               if (!Menu.isActive()) {
+                  doInit=true;
+                  inMenu=false;
+                  Menu.destroy();
+                  Sounds.destroyMenu();
+               }
+            } else {
+            if (!Game.isActive()) {
+               inMenu = true;
+               doInit = true;
+               Game.destroy();
+               }
+
+            }
+
+            repaint(0,0,MyGame.canvasWidth, MyGame.canvasHeight);
+            serviceRepaints();
+            Thread.sleep(SLEEP);
+         }
+      }
+   catch(InterruptedException ie) { System.out.println(ie.toString()); }
+}
+
+
+protected void paint(Graphics g){
+
+
+
+   if (inMenu) Menu.paint(g);
+   else Game.paint(g); 
+
+}
+
+
+   synchronized void start()
+   {
+      running=true;
+      animationThread=new Thread(this);
+      animationThread.start();
+   }
+
+synchronized void stop() { running=false; }
+
+
+public void keyPressed(int keyCode) {
+   if (allowKeys) {
+      if (inMenu) {
+         Menu.processKey(keyCode, getGameAction(keyCode));
+      }
+      else {
+         Game.processKey(keyCode, getGameAction(keyCode));
+      }
+   }
+
+}
+
+}
+
+Как видите, наш класс не только проверяет какой из методов paint() должен использоваться, но и следит за своевременным завершением метода init(). Мы также разделяем обработку клавиш keypressed(), так что игра и меню используют собственные обработчики.
+Стоит ли применять этот метод?
+
+К недостаткам этого подхода можно отнести необходимость следить за правильностью размещения элементов меню на экране. Кроме того, графическое меню занимает намного больше места в jar архиве, чем реализованное на основе форм.
+
+На мой взгляд, преимущества, которое дает этот подход, более значимы. Вы получаете красивое меню, органично сочетающееся с Вашей игрой и дополняющее игровую атмосферу. Кроме того, телефоны с каждом годом оснащаются все большим объем памяти. 
+
+Несомненно, современные разработчики игр должны снабжать свои продукты качественными меню. Требования к памяти в последнее время становятся менее жесткими, так что не стоит экономить на удобстве пользователя и атмосфере игры. Надеюсь, данная статья пригодится Вам.

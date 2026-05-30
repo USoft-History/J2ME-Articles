@@ -1,0 +1,298 @@
+29 июля 2008 г. - J2ME использование картографического сервиса Google Maps
+
+
+
+Компания Google предоставляет бесплатные картографические интерактивные сервисы Google Maps и Google Earth (спутниковые фото земной поверхности). 
+
+В данной статье рассмотрим создание несложного J2ME приложения для работы с Google Earth. Данные представленные в виде jpg фото размером 256х256 пикселей будем получать с сервера kh.google.com. Строка запроса будет иметь следующий вид "http://kh.google.com/kh?v=projection&t=address", где 
+projection = 3 используется Меркатор проекция. 
+address - адрес является строкой, кодирующих позицию конкретного квадрата карты. Адрес находиться способом рекурсивного quartered (четвертования) пока желаемый уровень масштаба карты не будет достигнут. Google назначает четыре квадранта q, r, s , t. 
+
+ 
+
+
+Используя такой метод кодирования можно с большой точностью , до метра, задать координаты отображаемого объекта. Так используя строку запроса "http://kh.google.com/kh?v=3&t=trtqrsstrqtsqqrrqr" можно увидеть дом где я живу в городе Иваново. 
+
+ 
+Впечатляет!!!
+
+
+Есть j2me приложение от Google которое использует AJAX технологию и klm протокол передачи данных. Я предпочитаю написать функции которые производят обработку данных непосредственно в телефоне, это позволяет в дальнейшем легко расширять функциональность программы: 
+подключение GPS навигатора; 
+прокладывание маршрута и определение курсов, и многое другое. 
+
+Задачи преобразования координат решают функции : 
+
+//////////////////////////////преобразование градусов, минут, секунд в double ///////////////////////////////////
+public static double convertCoord(String StrGrad, String StrMin, String StrSec)
+{
+double dkord = Double.parseDouble(StrGrad )+(Double.parseDouble(StrMin)/60)+(Double.parseDouble(StrSec)/3600);
+return dkord;
+}
+///////////////////////преобразование в координаты Google satellite /////////////////////////////////////////
+public static String GetQuadtreeAddress(double m_long, double lat, int zoom)
+{
+int digits = zoom;// zoom 17 max; 12= optimal;
+String quad = "t";
+String lookup = "qrts";
+double x = (180.0 + m_long) / 360.0;
+double y = -lat * PI / 180.0;
+y = 0.5 * log((1.0+Math.sin(y)) / (1.0 - Math.sin(y)));
+y *= 1.0/(2.0 * PI);
+y += 0.5;
+while (digits >0)
+{ digits = digits -1;
+x -= Math.floor(x);
+y -= Math.floor(y);
+quad = quad + lookup.charAt((x >= 0.5 ? 1 : 0) + (y >= 0.5 ? 2 : 0));
+x *= 2;
+y *= 2;
+}
+return quad;
+}
+////////////////////// преобразует для map и HIBRID ///////////////////////////////////
+public static int[] Satellit_Map(String textSat)
+{ int[] result = new int[3];
+int i;
+int kx=0;
+int ky=0;
+int zm = 18;//максимальный
+
+for (i = 1; i < textSat.length(); i++) {
+switch (textSat.charAt(i)) {
+case 'q': {
+kx = 2 * kx;
+ky = 2 * ky;
+break;
+}
+case 'r': {
+kx = 2 * kx + 1;
+ky = 2 * ky;
+break;
+}
+case 't': {
+kx = 2 * kx;
+ky = 2 * ky + 1;
+break;
+}
+case 's': {
+kx = 2 * kx + 1;
+ky = 2 * ky + 1;
+break;
+}
+}
+zm--;
+}
+
+result[0] = kx;
+result[1] = ky;
+result[2] = zm - 1;
+return result;
+
+}
+
+///************* обратные преобразования *******************************************
+/////////////////////////преобразует map в satelit//////////////////////////////////////////////////////
+public static String Map_Satellit(int kx, int ky, int zoom )
+{
+StringBuffer quad=new StringBuffer();
+for (int i=1; i <= (17-zoom); i++) {
+int ksx = kx % 2;
+int ksy =ky % 2;
+if ((ksx == 0) & (ksy ==0)) { quad.append('q');}
+if ((ksx==1) & (ksy ==0)) { quad.append('r');}
+if ((ksx ==0) & (ksy ==1)) { quad.append('t');}
+if ((ksx==1) & (ksy ==1)) {quad.append('s');}
+kx =kx >>1; ky = ky >>1;
+}
+quad.append('t');
+quad.reverse();
+return quad.toString();
+
+}
+/////////////////////////преобразует 256X256 в satelit //////////////////////////////////////////////////////
+public static String Map_Satellit(int kx, int ky)
+{
+StringBuffer quad=new StringBuffer();
+for (int i=1; i <= (8); i++) {
+int ksx = kx % 2;
+int ksy =ky % 2;
+if ((ksx == 0) & (ksy ==0)) { quad.append('q');}
+if ((ksx==1) & (ksy ==0)) { quad.append('r');}
+if ((ksx ==0) & (ksy ==1)) { quad.append('t');}
+if ((ksx==1) & (ksy ==1)) {quad.append('s');}
+kx =kx >>1; ky = ky >>1;
+}
+quad.append('t');
+quad.reverse();
+return quad.toString();
+
+}
+
+
+//////////////////*****************oбрат преобразов в долготу широту из y, x map*******************
+public static String convertXY_dsh(int kx, int ky , int zoom){
+double gy,gx;
+double x=0.00;
+double y=0.00;
+int[] dr= new int[3];;
+int[] dl= new int[3];;
+
+double xn= (1 << (zoom+1));
+y = ky / xn;
+x = kx / xn;
+y =y-0.5;
+y = y/(1/(2 * PI)); // scale factor from radians to normalized
+gy =2*atan(pow( E ,y))- (0.5 * PI);
+gy =-gy/(PI/180);
+
+gx = x *360-180;
+dr=covgr(gx);
+dl=covgr(gy);
+
+return String.valueOf(dl[0])+" ."+String.valueOf(dl[1])+" ."+String.valueOf(dl[2])+" ."+
+" *** "+ String.valueOf(dr[0])+" ."+String.valueOf(dr[1])+" ."+String.valueOf(dr[2]);}
+
+/////////////////////// преобразование в грусы, мин, сек. ////////////////////////////////////
+public static int[] covgr(double gg){
+int[] result = new int[3];
+double dg= (int)gg;
+double dm = (int)((gg-dg)*60);
+///System.out.println(String.valueOf(dm));
+double ds=(int)((gg-dg-dm/60)*3600);
+
+result[0]= (int)dg;
+result[1]= (int)dm;
+result[2]= (int)ds;
+return result;
+
+}
+
+Для отображения полученных фото использовал класс GameCanvas позволяющий использовать слои и внеэкранный буфер. 
+
+public Map_Canvas()
+{ super(false);
+
+
+setFullScreenMode(true);//полноэкранный режим
+
+try {
+xy_laer[0] = new XY_laer();
+xy_laer[1] = new XY_laer();
+xy_laer[2] = new XY_laer();
+xy_laer[3] = new XY_laer();
+
+
+layerManager = new LayerManager();
+fon_Image1 = Image.createImage("/space.png"); //заставка
+
+pointer_img = Image.createImage("/pointer.png");//курсор
+
+pointer_Sprt = new Map_Sprite(pointer_img, 25, 25, getWidth(), getHeight());
+pointer_Sprt.defineCollisionRectangle(13,13, 1,1);
+
+
+//заполняем фоновым изображением 
+tiledLayer[0] = new TiledLayer(4, 4, fon_Image1, 64, 64);
+tiledLayer[1] = new TiledLayer(4, 4, fon_Image1, 64, 64);
+tiledLayer[2] = new TiledLayer(4, 4, fon_Image1, 64, 64);
+tiledLayer[3] = new TiledLayer(4, 4, fon_Image1, 64, 64);
+tiledLayer[4] = new TiledLayer(4, 4, fon_Image1, 64, 64);
+// fon_Image1 = null;
+for (int i = 0; i < 16; i++) {
+int column = i % 4;
+int row = (i - column) / 4;
+tiledLayer[0].setCell(column, row, 1);
+tiledLayer[1].setCell(column, row, 1);
+tiledLayer[2].setCell(column, row, 1);
+tiledLayer[3].setCell(column, row, 1);
+tiledLayer[4].setCell(column, row, 1);
+}
+}
+catch (Exception e) { }
+
+
+}
+
+Используется две степени свободы: перемещение курсора и перемещение подложки (лееров). Одновременно на экране отображается не более 4 лееров. Все загруженные фото сохраняются в хранилище RecordStore для уменьшения трафика и возможности работы при недоступности связи. Каждая картинка сохраняется под именем строки адреса доступа к ней, пример " trtqrsstrqtsqqrrqr" это позволяет максимально упростить поиск записи в хранилище. 
+
+Внутри каждого квадрата определяем меркатор координаты под курсором фунцией Map_Satellit(х, y), которые потребуются для увеличения масштаба. 
+
+Достигая края леера загружаем продолжение карты, для расчёта меркатор координаты используем функцию int[] Satellit_Map(String textSat) возвращающей 3 параметра kx, ky, zm, добавляем или вычитаем в зависимости от направления движения и проводим обратное преобразование функцией Map_Satellit(int kx, int ky, int zoom ). 
+
+Получив строку адреса ищем в хранилище, если не находим загружаем с сервера функцией Dowload_Image(String path_image) работающеё в отдельном потоке. 
+
+Глобальная переменная i_proc отображает процесс загрузки, size_image - размер файла в байтах, загрука в процентах равна i_proc / (size_image / 100); 
+
+//************************* загрузка из Internet *********************************
+public String Dowload_Image(String path_image){
+HttpConnection c = null;
+InputStream s=null;
+i_proc =0;
+size_image =0;
+arrayImage = null;
+Image_dowload=null;
+long mm=0;
+try {
+c = (HttpConnection)Connector.open(path_image,Connector.READ_WRITE, true);
+path_image = null;
+s = c.openInputStream();
+mm= c.getLength();
+
+size_image =(int)mm;
+arrayImage =new byte[size_image];///иниц. массив
+
+// s.read(arrayImage, 0, size_image);
+for ( i_proc = 0; i_proc < size_image; i_proc++ )
+{
+arrayImage[i_proc] = ( byte )s.read();//копируем
+}
+Image_dowload = Image.createImage(arrayImage,0,size_image);
+}
+
+catch ( IllegalArgumentException ce ) {
+// System.out.println("неверный URL "+ ce.getMessage() );
+arrayImage = null;
+// System.gc();
+return "неверный URL ";
+
+}
+catch ( IOException ioe ) {
+// System.out.println("нет соединения "+ ioe.getMessage() );
+arrayImage = null;
+// System.gc();
+return "нет соединения";
+
+}
+catch ( Exception e ) {
+// System.out.println("сервер не ответил "+e.getMessage() );
+arrayImage = null;
+
+return "сервер не ответил";
+
+}
+
+
+finally {
+try {c = null;
+if ( s != null )
+{ s = null;//.close();
+c = null;}
+if ( c != null )
+c.close();
+// System.gc();
+}
+catch ( IOException ioe ) {
+}
+catch (java.lang.ArithmeticException axz) {}
+
+}
+return "";
+
+} 
+
+Посчитать трафик проблем нет. Функции работы с хранилищем вопросов вызывать не должны. 
+
+Вот пожалуй и всё. Исходники прилагаю. Код до конца не доделал, руки не доходят
+
+Автор: Альберт Мамедов (magdelphi)

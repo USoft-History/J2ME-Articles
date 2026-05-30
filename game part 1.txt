@@ -1,0 +1,222 @@
+12 апреля 2005 г. - Пишем игру для телефона. Часть 1
+
+
+
+Простейший MIDlet
+
+
+Автор Carol Hamer
+
+
+
+
+С приходом MIDP 2.0 API написание игр для мобильных устройств превратилось в очень приятное и занимательное занятие. Меня, как разработчика не могут не радовать появившееся во второй версии богатые графические возможности. Конечно, игры можно было писать и с MIDP 1.0 (Atair 2600 яркое тому подтверждение), но это требовало такого терпения и упорства, что многие не выдерживали, да и возможности были весьма скудными. MIDP 2.0 по прежнему не позволяет писать игры сопоставимые по уровню с играми современных PC. По понятным причинам телефоны всегда будут отставать по своим возможностям от настольных компьютеров. Однако уже сейчас вы можете писать игры уровня Super Mario Brothers и Alladin.
+
+В этом руководстве описывается создание простого игрового MIDlet-а (Maidlet - это такое приложение, которое можно запускать на мобильном телефоне).  Подразумевается,что Вы знакомы с языком Java, но не знаете что такое J2ME.  
+
+Собственно, что мы будем разрабатывать? Игра очень проста. Вы управляете ковбоем, который бегежит через прерии, перепрыгивая через перекати-поле. Конечно, это очень глупая игра, но с ее помощью можно продемонстрировать основные приемы, которые вам понадобятся при написании серьезных игр.
+
+Все исходники и ресурсы игры приводятся здесь. http://www.microdevnet.com/articles/resources.zip
+
+Приступим!
+
+Если Вы все еще не списали J2ME, то самое время сделать это.  http://java.sun.com/j2me/download.html. Java 2 Micro Edition Wireless Toolkit включает в себя простую Среду разработки MIDlet-ов, эмулятор мобильного телефона, и несколько полезных примеров. Я не собираюсь Вам детально описывать инсталяцию. Статья об этом есть на нашем сайте.
+
+Если Вы начнете изучать демонстрационные приложения, то обнаружите, что они состоят из двух файлов: *.jad и *.jar. Jar файл - это архив, в котором содержатся файлы классов, ресурсов, и манифест. Jad файлы (файлы дескриптора) содержат описательную информацию, которая помогает устройству загрузить MIDlet. В Jad файле должены быть описаны размер приложения и URL jar файла MIDlet-а. Ниже приведен пример jad файла Hello World приложения:
+
+MIDlet-1: Hello World, /icons/hello.png, net.frog_parrot.hello.Hello
+MMIDlet-Description: Hello World for MIDP
+MIDlet-Jar-URL: hello.jar
+MIDlet-Name: Hello World
+MIDlet-Permissions: 
+MIDlet-Vendor: frog-parrot.net
+MIDlet-Version: 2.0
+MicroEdition-Configuration: CLDC-1.0
+MicroEdition-Profile: MIDP-2.0
+MIDlet-Jar-Size: 3201
+
+Свойство MIDlet-1 (и MIDlet-2, и т.д.) включает имя MIDlet-а, положение его иконки, а также название класса, который должен быть запущен. Первые две строки описывают как MIDlet появится в меню MIDlet-ов. Иконка должна содержаться в jar архиве, и ее путь должен быть представлен в формате, используемом в методе Class.getResource(). В этом примере jar содержит папку icons, в которой находится иконка hello.png. Она выглядит вот так:
+
+
+
+Свойство MIDlet-Jar-Size определяет размер jar  файла в байтах. Будте осторожны, поскольку если Вы перекомпилируете демо проекты или свое приложение, используя build скрипт,  то Вы должны вручную изменить размер полученного jar файла в дескрипторе. Если MIDlet-Jar-Size в jad файле не соответствует размеру jar файла, MIDlet не запустится. (Вместо того, чтобы каждый раз вручную править jad файл, я использую простой скрипт, который вы можете найти в Приложение А.)  MIDlet-Jar-URL определяет адрес jar файла MIDlet-а  относительно jad файла. Если оба этих файла находятся в одной папке, то сюда надо написать просто имя jad файла. Назначение остальных параметров очевидно и не нуждается в комментариях.
+
+Hello World 
+
+Чтобы проиллюстрировать базовые компоненты MIDlet-а я написал еще одну версию "Hello World" приложения. MIDlet выводит на экран телефона сообщение "Hello World!"  и убирает его по нажатию клавиши "Toggle Msg" . Нажатие кнопки "Exit" приводит к закрытию MIDlet-а. Приложение состоит из двух классов: MIDlet класс Hello и Canvas класс HelloCanvas. Принцип работы приложения достаточно очевиден, поэтому я ограничился комментариями внутри листинга.
+
+******************* Листинг файла Hello.java ************************
+package net.frog_parrot.hello;
+
+import javax.microedition.midlet.*;
+import javax.microedition.lcdui.*;
+
+/**
+ * Это главный класс нашего приложения.
+ *
+ * @автор Carol Hamer
+ */
+public class Hello extends MIDlet implements CommandListener {
+
+  /**
+   * Canvas - это участок экрана, который будет отведен игре.
+   */
+  HelloCanvas myCanvas;
+
+  /**
+   * Command - объект, содержащий кнопки.
+   */
+  private Command exitCommand = new Command("Exit", Command.EXIT, 99);
+
+  /**
+   * Command - объект, содержащий кнопки.
+   */
+  private Command newCommand = new Command("Toggle Msg", Command.SCREEN, 1);
+
+  /**
+   * Инициализация canvas и commands.
+   */
+  public Hello() {
+    myCanvas = new HelloCanvas(Display.getDisplay(this));
+    myCanvas.addCommand(exitCommand);
+    myCanvas.addCommand(newCommand);
+    myCanvas.setCommandListener(this);
+  }
+
+  //----------------------------------------------------------------
+  //  Выполняемая чсть MIDlet-а
+
+  /**
+   * Запуск приложения.
+   */
+  public void startApp() throws MIDletStateChangeException {
+    myCanvas.start();
+  }
+  
+  /**
+   * Если MIDlet использует ресурсы, они должны быть 
+   * удалены из памяти в этом методе.
+   */
+  public void destroyApp(boolean unconditional) 
+      throws MIDletStateChangeException {
+  }
+
+  /**
+   * Этот метод вызывается, чтобы известить MIDlet о переходе
+   * в режим паузы. MIDlet должен использовать своевременно для 
+   * освобождения части ресурсов.
+   */
+  public void pauseApp() {
+  }
+
+  //----------------------------------------------------------------
+  //  Выполняемая чсть  CommandListener
+
+  /*
+   * Вывод результата вызова команды (пауза или выход).
+   */
+  public void commandAction(Command c, Displayable s) {
+    if(c == newCommand) {
+      myCanvas.newHello();
+    } else if(c == exitCommand) {
+      try {
+ destroyApp(false);
+ notifyDestroyed();
+      } catch (MIDletStateChangeException ex) {
+      }
+    }
+  }
+  
+}
+
+
+**************** Листинг файда HelloCanvas.java ********************
+
+package net.frog_parrot.hello;
+
+import javax.microedition.lcdui.*;
+import javax.microedition.lcdui.game.*;
+
+/**
+ * Этот класс предоставляет часть экрана, которая отведена нашей игре.
+ * @Автор Carol Hamer
+ */
+public class HelloCanvas extends javax.microedition.lcdui.game.GameCanvas {
+
+  //---------------------------------------------------------
+  //   поля
+
+  /**
+   * Указатель на экран устройства
+   */
+  Display myDisplay;
+
+  /**
+   * Должен ли экран в данный момент отображать сообщение.
+   */
+  boolean mySayHello = true;
+
+  //-----------------------------------------------------
+  //    Инициализация и изменение состояния игры
+
+  /**
+   * Конструктор просто устанавливает экран.
+   */
+  public HelloCanvas(Display d) {
+    super(false);
+    myDisplay = d;
+  }
+
+  /**
+   * Начало приложения.
+   */
+  void start() {
+    myDisplay.setCurrent(this);
+    repaint();
+  }
+
+  /**
+   * 
+   * Изменить состояние отображения сообщения.
+   */
+  void newHello() {
+    mySayHello = !mySayHello;
+    // Перерисовать экран.
+    repaint();
+  }
+
+  //-------------------------------------------------------
+  //  Графические методы
+
+  /**
+   * Очистить экран и если надо показать сообщение.
+   */
+  public void paint(Graphics g) {
+    // x и y - координаты верхнего левого угла игрового экрана.
+    int x = g.getClipX();
+    int y = g.getClipY();
+    // w и h ширина и высота зоны экрана.
+    int w = g.getClipWidth();
+    int h = g.getClipHeight();
+    // Очистить экран (закрасить белым).
+    g.setColor(0xffffff);
+    g.fillRect(x, y, w, h);
+    // Если нужно, вывести сообщение.
+    if(mySayHello) {
+      Font font = g.getFont();
+      int fontHeight = font.getHeight();
+      int fontWidth = font.stringWidth("Hello World!");
+      // Устанавливаем красный цвет для текста.
+      g.setColor(0x00ff0000);
+      g.setFont(font);
+      // Выводим строку в центре экрана.
+      g.drawString("Hello World!", (w - fontWidth)/2, 
+     (h - fontHeight)/2,
+     g.TOP|g.LEFT);
+    }
+  }
+
+}
+
+
+Перевод: Alex. Запрещается использовать любую часть данного текста без ссылки на источник:  http://www.mobilab.ru

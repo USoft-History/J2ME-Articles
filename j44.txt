@@ -1,0 +1,196 @@
+21 мая 2005 г. - MIDP низкоуровневый API пользовательского интерфейса
+
+
+ 
+
+Низкоуровневый API нацелен на использование разработчиками игр. В отличие от высокоуровневого, он предоставляет полный доступ к экрану и событиям. При его использовании вы не сможете воспользоваться готовыми формами и полями ввода. Все это при необходимости нужно будет рисовать вручную. Вы можете использовать оба API в одном приложении, но не в одно и то же время. Думайте о приложении как о колоде карт, когда только одна карта может быть показана в данный момент времени. Каждая такая карта, которая в терминологии MIDP называется экраном, может использовать либо низкоуровневый, либо высокоуровневый API, но не оба. Существует одно исключение, которое мы обсудим чуть позже.
+
+Чтобы использовать низкоуровневый API, необходимо переопределить класс Canvas:
+
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+
+public class MyCanvas extends Canvas {
+
+  private MIDlet midlet;
+
+   public MyCanvas( MIDlet midlet ){
+     this.midlet = midlet;
+   } 
+
+   protected void paint( Graphics g ){
+     g.setColor( 255, 255, 255 );
+     g.fillRect( 0, 0, getWidth(), getHeight() );
+     g.setColor( 0, 0, 0 );
+     g.drawString( "Hello there!", getWidth()/2, 0,g.TOP | g.HCENTER );
+   }
+}
+
+Все классы пользовательского интерфейса расположены в пакете javax.microedition.lcdui. Вам также придется подключить пакет javax.microedition.midlet, поскольку вы передаете каждому canvas ссылку на MIDlet. В вашем canvas субклассе должен быть реализован метод paint. Именно он вызывается системой, если необходимо перерисовать экран. Методу paint передается объект Graphics, который определяет стандартные методы для рисования и использования графических примитивов, например: drawArc, drawLine, drawRect, и drawString. API поддерживает 24-bit RGB модель цветов, хотя на устройстве, где будет работать приложение, их может быть и меньше. В примере MyCanvas просто закрашивает экран в белый цвет и выводит в верху черный текст.
+
+Canvas активизируется вызовом метода setCurrent объекта Display. Это обычно делается внутри метода startApp:
+
+import javax.microedition.midlet.*;
+
+public class MyMIDlet extends MIDlet {
+
+   private Display display;
+   private MyCanvas canvas;
+
+   public MyMIDlet(){
+     display = Display.getDisplay( this );
+     canvas = new MyCanvas( this );
+   }
+
+   protected void startApp(){
+     display.setCurrent( canvas );
+   }
+
+   protected void pauseApp(){
+   }
+
+   protected void destroyApp( boolean unconditional ){
+   }
+
+   public void exit(){
+     destroyApp( true );
+     notifyDestroyed();
+   }
+}
+
+Приведенный выше метод имеет один недостаток: мы не имеем возможности завершить его работу. Очевидно, нам нужно каким-либо образом отслеживать действия пользователя. Существует два пути: использовать необработанные события ввода(raw input events) или события команд (command events).
+
+Чтобы получить доступ к событиям ввода, необходимо переопределить соответствующие методы объекта Canvas. Существуют методы для обработки событий полученных в результате: 
+нажатия пользователем клавиши (keyPressed, keyRepeated и keyReleased) ; 
+использования указателя (pointerPressed, pointerDragged и pointerReleased), если им оснащено устройство; 
+отображения canvas (showNotify, hideNotify). 
+
+
+Например, мы можем организовать завершение приложения, обрабатывая событие keyPressed.
+
+protected void keyPressed( int keyCode ){
+  ((MyMIDlet) midlet).exit();
+}
+
+Все события от клавиатуры определяют переменную keyCode, которая указывает на клавишу, спровоцировавшую событие. Положительное значение соответствует коду клавиши в формате Unicode, а отрицательное - коду клавиши, которая не может быть представлена в этом формате. Коды клавиш и раскладки отличаются на разных моделях устройств, поэтому в Canvas определен ряд констант, которые позволяют абстрагироваться от конкретного устройства. Например, существуют константы, соответствующие игровым действиям (UP, DOWN, LEFT, RIGHT, FIRE, GAME_A, GAME_B, GAME_C и GAME_D). Во время инициализации программы или ее работы можно вызвать метод Canvas.getGameAction и переопределить эти константы.
+
+Базовый класс может выглядеть следующим образом:
+
+public abstract class GameCanvas extends Canvas {
+   protected MIDlet midlet;
+   protected int fireKey;
+   protected int leftKey;
+   protected int rightKey;
+   protected int upKey;
+   protected int downKey;
+
+   public GameCanvas( MIDlet midlet ){
+     this.midlet = midlet;
+     fireKey = getKeyCode( FIRE );
+     leftKey = getKeyCode( LEFT );
+     rightKey = getKeyCode( RIGHT );
+     upKey = getKeyCode( UP );
+     downKey = getKeyCode( DOWN );
+   }
+}
+
+Тогда его переопределение может быть таким:
+
+public class MyCanvas extends GameCanvas {
+   private String message = "Press any key";
+
+   public MyCanvas( MIDlet midlet ){
+     super( midlet );
+   }
+
+   protected void paint( Graphics g ){
+     g.setColor( 255, 255, 255 );
+     g.fillRect( 0, 0, getWidth(), getHeight() );
+     g.setColor( 0, 0, 0 );
+     g.drawString( message, getWidth()/2, 0,
+       g.TOP | g.HCENTER );
+   }
+
+   protected void keyPressed( int keyCode ){
+     if( keyCode == fireKey ){
+       message = "FIRE";
+     } else if( keyCode == leftKey ){
+       message = "LEFT";
+     } else if( keyCode == rightKey ){
+       message = "RIGHT";
+     } else if( keyCode == upKey ){
+       message = "UP";
+     } else if( keyCode == downKey ){
+       message = "DOWN";
+     } else {
+       message = getKeyName( keyCode );
+     }
+
+     repaint();
+   }
+}
+
+События указателя являются дополнительными, поскольку не все MIDP устройства им оснащены. Чтобы определить поддерживает ли устройство работу с указателем, вызовите метод Canvas.hasPointerEvents. События указателя возвращают его координаты:
+
+protected void pointerPressed( int x, int y ){
+   // Код обработки
+} 
+
+Другим способом отслеживания активности пользователя является "прикрепление" команд к canvas-у. Команда - это абстрактное представление действия. Каждая команда имеет определенные пользователем метку, тип и приоритет. Устройство использует тип, чтобы сопоставить команду с определенной клавишей или кнопкой. Например, если устройство имеет стандартную кнопку ОК, то тип команды OK гарантирует, что команда будет вызвана при нажатии на эту кнопку. Существуют следующие типы: BACK, CANCEL, EXIT, HELP, ITEM, OK, SCREEN и STOP. Одной кнопке может соответствовать несколько типов. В такой ситуации для сопоставления используется приоритет команды, который представляет собой положительное целое число. Самый высокий приоритет - 1.
+
+Для создания команды используется класс Command:
+
+Command exitCommand = new Command( "Exit", Command.SCREEN, 1 ); 
+
+Чтобы сопоставить команду с кнопкой, используйте метод addCommand method:
+
+canvas.addCommand( exitCommand ); 
+
+Можно зарегистрировать целый список команд:
+
+setListener: canvas.setListener( listener );
+
+Список должен осуществлять CommandListener интерфейс. Обычно списки используются в главном классе MIDLet-а:
+
+import javax.microedition.midlet.*;
+
+public class MyMIDlet extends MIDlet implements 
+   CommandListener {
+
+   private Display display;
+   private MyCanvas canvas;
+   private Command exitCommand = new Command( 
+     "Exit", Command.SCREEN, 1 );
+
+   public MyMIDlet(){
+     display = Display.getDisplay( this );
+     canvas = new MyCanvas( this );
+     canvas.addCommand( exitCommand );
+     canvas.setListener( this );
+   }
+
+   protected void startApp(){
+     display.setCurrent( canvas );
+   }
+
+   protected void pauseApp(){
+   }
+
+   protected void destroyApp( boolean unconditional ){
+   }
+
+   public void exit(){
+     destroyApp( true );
+     notifyDestroyed();
+   }
+   public void commandAction( Command c, Displayable d ){
+     if( c == exitCommand ){
+       exit();
+     }
+   }
+}
+
+Интерфейс CommandListener определяет единственный метод commandAction, который выполняется при вызове команды. Ссылка на Command объект вызванной команды передается точно так же, как ссылка на объект активного во время вызова экрана.
+
+Автор оригинала Eric Giguere .
+Перевод: aRix

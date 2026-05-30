@@ -1,0 +1,202 @@
+19 марта 2005 г. - Wireless Development Tutorial Часть 2
+
+
+
+Автор оригинала Jonathan Knudsen. 
+
+В первой части данного руководства Вы узнали, как написать простое J2ME приложение (Java 2, Micro Edition). Приложение - MIDlet, был создано для Mobile Information Device Profile - одной из спецификации J2ME. Настало время расширить горизонты познания. Я расскажу вам как написать и развернуть servlet (серверное Java приложение), а затем как прицепить MIDlet к servlet-у. По окончанию чтения этой статьи, Вы будете обладать всеми необходимыми инструментами для разработки end-to-end wireless Java приложений. 
+
+Для отладки и тестирования servlet-ов нам понадобится установить локальный сервер. Я предлагаю воспользваться одной из следующих бесплатных программ: 
+
+* Tomcat (http://jakarta.apache.org/tomcat/) бесплатно распространяемая программа, подерживающая Java servlet и JavaServer Pages (JSP) спецификации. Отличная платформа для разработки и тестирования servlet-ов. 
+
+* The Java 2, Enterprise Edition (J2EE) Reference Implementation server http://java.sun.com/j2ee/ сервер является полным набором инструментов J2EE спецификации. Конечно, каждый из этих серверов имеет свои приемущества и недостатки. Tomcat проще использовать при разработке servlet-ов. Однако его возможности ограничиваются servlet-ами and JSP. J2EE RI server же поддерживает полный спектр J2EE технологий, включая servlet-ы, JSP, EJB, JMS, JNDI, и многое другое, но более сложен. В этой статье мы будем использовать Tomcat. 
+Инсталяция и запуск Tomcat 
+
+Tomcat распространяется в виде Zip архива, который можно скаяать здесь http://jakarta.apache.org/tomcat/. Tomcat прост в установке. Просто распакуйте скачаный файл. Можете поместить содержимое архива в любую папку. Я распокавал архив сюда: c:\jakarta-tomcat-4.1.27\. Tomcat написан на Java. Для запуска Tomcat Вы должны указать ему папку с J2SE. Чтобы сделать это, создайте системную переменную JAVA_HOME и поместите в нее путь к J2SE. На моей машине эта переменная имеет следующее значение: c:\j2sdk1.4.0. Чтобы запустить Tomcat, откройте окно коммандной строки, перейдите в bin каталог Tomcat-а. Выполните команду startup и подождите. Откроется окно, где будут показаны инициализационные сообщения. 
+
+
+ 
+
+
+Чтобы проверить правильность установки Tomcat, откройте браузер и введите URL: http://localhost:8080/. Если сервер установился правильно, Вы увидете начальную страницу Tomcat со ссылками на несколько демонстрационных servlet-ов и JSP. Чтобы завершить работу сервера, откройте другую коммандную строку, перейдите в папку bin Tomcat-а и выполните команду shutdown. Запускать и останавливать сервер из коммандной строки весьма утомительно, поэтому я рекомендую Вам создать Windows ярлыки с startup и shutdown командами. 
+Написание исходного кода Servlet-а 
+
+Написание исходного кода вашего servlet-а очень похоже на написание любого другого Java кода: используйте любой текстовый редактор для создания .java файлов. В этом примере Мы напишем очень простой servlet, который назовем HitServlet. Исходный код приведен ниже. Это простейший счетчик. Он подсчитывает обращения и возвращает клиенту сообщение, содержащее их число.
+
+ --------- 
+
+import javax.servlet.http.*;
+import javax.servlet.*;
+import java.io.*;
+
+public class HitServlet extends HttpServlet {
+  private int mCount;
+  
+  public void doGet(HttpServletRequest request,
+      HttpServletResponse response)
+      throws ServletException, IOException {
+    String message = "Hits: " + ++mCount;
+
+    response.setContentType("text/plain");
+    response.setContentLength(message.length());
+    PrintWriter out = response.getWriter();
+    out.println(message);
+  }
+} 
+
+-------- 
+
+Практика показывает, что при разработке серьезных проектов но обойтись без четко структурированной системы каталогов. Доверьтесь мне и сохраните исходный код в файл, расположеный внутри корневого Tomcat каталога:
+
+ webapps/midp/WEB-INF/classes/HitServlet.java.
+
+ (Забегая вперед, я прошу вас создать каталог midp каталог и его подкаталоги.) 
+Компиляция Servlet - а
+
+Компиляция кода servlet-а очень сильно похожа на компиляцию других Java приложений, за исключением одного важного момента. Поскольку servlet API не является частью J2SE платформы, вам надо добавить его в CLASSPATH, прежде чем приступать к компилированию. Servlet API содержится в фйле common/lib/servlet.jar внутри каталога Tomcat. Просто добавьте этот файл в CLASSPATH. Теперь вы можете компилировать HitServlet.java используя javac. CLASSPATH задается в настройкх системы, но вы можете сделать это и из коммандной строки, как показано ниже: 
+
+C:\>set CLASSPATH=\jakarta-tomcat-4.1.27\common\lib\servlet.jar C:\>javac HitServlet.java 
+Развертывание Servlet-а
+
+Для развертывания servlet-а вы должны знать кое-что о web приложениях. Web приложение представляет собой набор статичного контента, такого как HTML файлы, рисунки, servlet-ы, и другие ресурсы к которым может быть предоставлен доступ череж web интерфейс. Tomcat поставляется вместе с несколькими встроенными web приложениями. Загляните в папку webapp. Мы собираемся создать новое web приложение и поместить в него наш servlet. Во-первых давайте создадим новое web приложение. Вы уже создали новую папку midp внутри webapps и сохранили в нее наш исходный код. Теперь нам надо подредактировать один из конфигурационных файлов Tomcat, чтобы сообщить ему о создании нового приложения. Откройте файл conf/server.xml в текстовом редакторе. В этом файле web приложения называются contexts. Прокрутите файл вниз до блока Context для приложения examples, которое выглядит примерно так: 
+
+<!-- Tomcat Examples Context --><CONTEXT path="/examples" crossContext="true" reloadable="true" debug="0" docBase="examples">
+
+на много строк ниже) создайте новый блок для нашего web приложения. Он будет похож на открытый тег, за исключением имени, которое надо поменять на midp.
+
+<!-- MIDP Context --><CONTEXT path="/midp" reloadable="true" docBase="midp" />
+
+ Сохраните файл. 
+
+Эти шаги позволяет перенаправить HTTP запрос в вашу папку. То есть любой входящий HTTP запрос, начинающийся с "/midp" (path) будет перенаправлен на веб приложение, находящееся в папке webapps/midp (docBase). Атрибут reloadable помогает в отладке. Он говорит Tomcat-у, что нужно автоматически обновлять servlet классы баз перезагрузки сервера. Итак, Вы создали web-приложение. Заполним его. Web приложение имеет стандартную для спецификации servlet-ов структуру каталогов. Мы не будем здесь подробно останавливаться на этом. Большую долю web приложения занимает файл web.xml , который описывает различные части web приложения. Этот файл создается для любого web приложения в папке WEB-INF/web.xml. Настало время создать файл web.xml. Настало время сделать так, чтобы наше приложение было доступно по адресу /hits. Заметте, что адрес для servlet-а является относительным. Полный путь будет http://localhost:8080/midp/hits. Скопируйте следующий текст и сохраните его в папке webapps/midp/WEB-INF/web.xml внутри Tomcat каталога. 
+
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!DOCTYPE web-app
+    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+    "http://java.sun.com/dtd/web-app_2_3.dtd">
+
+<web-app>
+  <servlet>
+    <servlet-name>bob</servlet-name>
+    <servlet-class>HitServlet</servlet-class>
+  </servlet>
+  
+  <servlet-mapping>
+    <servlet-name>bob</servlet-name>
+    <url-pattern>/hits</url-pattern>
+  </servlet-mapping>
+</web-app>
+
+Этот файл скажет Tomcat-у где искать servlet с именем HitServlet. Servlet-name внутренний по отношению к web.xml; он проводит servlet элемент к элементу servlet-mapping. Имя bob взято произвольно. Вы можете использовать любое другое имя. 
+
+Вы можете упрекнуть меня в том, что мы сохранили исходный код servlet-а в стандартную папку под WEB-INF названную classes. Поэтому Tomcat ожидает, что найдет файлы класса servlet-а. Не беспокойтесь, когда вы компилируете исходный код, класс servleta окажется в правельном месте. 
+
+Ваш servlet сейчас развернут и представляет собой web-приложение, но заметте, что Вы должны перезагрузить Tomcat чтобы изменения, которые вы внесли в server.xml вступили в силу. 
+
+Чтобы протестировать приложение, запустите браузер и наберите адрес http://localhost:8080/midp/hits. Вы должны увидеть результат выполнения HitServlet. Перезагрузите страницу несколько раз. Если Вы все сделали правильно, счетчик должен увеличиваться. 
+
+Как обратиться к Servlet-у из MIDlet-а
+
+Итак, Вы уже создали среду, которая поддерживает MIDP и servlet-ы. Настало время сцепить их вместе чтобы создать end-to-end Java приложение. MIDlet-ы могут соединяться с внешним миром по HTTP протоколу, и servlet, который Вы только что написали, доступен по HTTP. Таким образом, не составляет большого труда заставить их работать вместе. 
+
+Запустите KToolbar и откреойте MIDlet, который мы создали в предыдущей части. Мы хотим создать новый MIDlet,который будет соединяться с нашим servlet-ом, выводя на получая результат работы servlet-а и выводя его на экран. Ниже приводится код MIDlet-а.
+
+
+import java.io.*;
+
+import javax.microedition.io.*;
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+
+public class HitMIDlet
+    extends MIDlet 
+    implements CommandListener {
+  private Display mDisplay;
+  private Form mMainForm;
+  private StringItem mMessageItem;
+  private Command mExitCommand, mConnectCommand;
+  
+  public HitMIDlet() {
+    mMainForm = new Form("HitMIDlet");
+    mMessageItem = new StringItem(null, "");
+    mExitCommand = new Command("Exit", Command.EXIT, 0);
+    mConnectCommand = new Command("Connect",
+        Command.SCREEN, 0);
+    mMainForm.append(mMessageItem);
+    mMainForm.addCommand(mExitCommand);
+    mMainForm.addCommand(mConnectCommand);
+    mMainForm.setCommandListener(this);
+  }
+  
+  public void startApp() {
+    mDisplay = Display.getDisplay(this);
+    mDisplay.setCurrent(mMainForm);
+  }
+  
+  public void pauseApp() {}
+  
+  public void destroyApp(boolean unconditional) {}
+  
+  public void commandAction(Command c, Displayable s) {
+    if (c == mExitCommand)
+      notifyDestroyed();
+    else if (c == mConnectCommand) {
+      Form waitForm = new Form("Waiting...");
+      mDisplay.setCurrent(waitForm);
+      Thread t =  new Thread() {
+        public void run() {
+          connect();
+        }
+      };
+      t.start();
+    }
+  }
+  
+  private void connect() {
+    HttpConnection hc = null;
+    InputStream in = null;
+    String url = getAppProperty("HitMIDlet.URL");
+    
+    try {
+      hc = (HttpConnection)Connector.open(url);
+      in = hc.openInputStream();
+
+      int contentLength = (int)hc.getLength();
+      byte[] raw = new byte[contentLength];
+      int length = in.read(raw);
+
+      in.close();
+      hc.close();
+
+      // Show the response to the user.
+      String s = new String(raw, 0, length);
+      mMessageItem.setText(s);
+    }
+    catch (IOException ioe) {
+      mMessageItem.setText(ioe.toString());
+    }
+    mDisplay.setCurrent(mMainForm);
+  }
+}
+
+ Главный экран HitMIDlet-а похож на HelloMIDlet, но он включает две команды EXIT и Connect. Connect, которая создает отдельный поток и вызывает метод connect(), который заботится о сетевом соединении и получении результата. 
+
+Скопируйте этот код в свой редактор и сохраните его как HitMIDlet.java внутри папки apps/HelloSuite/src в J2ME Wireless Toolkit директории. 
+
+Есть еще две вещи, о которых нужно позаботиться. Во-первых вы должны сказать toolkit-у об этом новом MIDlet-е. Щелкните Settings..., затем выбирете MIDlets. Нажмите Add и введите в полях имени класса и MIDlet-а значение "HitMIDlet". Можете оставить поле Icon незаполненным. Нажмите OK. Вы должны увидеть HelloMIDlet и HitMIDlet. 
+
+Теперь Вам надо определить каким образом будет устанавливаться соединение. (Это свойство задается в третьей строке метода connect()) Щелкните Settings... внутри toolkit-а, затем выберите User Defined. Нажмите кнопку Add. Напишите в поле property name HitMIDlet.URL. Поле value должно содержать URL, по которому доступен HitServlet, тот самый путь который вы вызывали в браузере, когда тестировали servlet. Нажмите OK. 
+
+Теперь нажмите Build, чтобы выполнить компановку приложения. Предположим, Вы не получили никаких сообщений об ошибках. Все готово. Осталось протестировать приложение. Запустите Servlet. Затем нажмите Run и выберите HitMIDlet. Выберите команду Connect. Если Все было сделано правильно, HitMIDlet обратится к HitServlet и покажет результат на экране 
+
+эмулятора. 
+
+ 
+ 
+Замечания 
+Вы только что создали ваше собственное web приложение. Вы легко можете изменить и протестировать HitServlet. Просто внесите изменения в исходный код и перекомпилируйте проект. В следующий раз, когда вы загрузите servlet из Вашего браузера или из HelloMIDlet, Tomcat будет использовать новую версию класа servlet-а (Помните артрибут reloadable в файле server.xml? Думаю, Вы догадались для чего он нужен.) Если Вы захотите написать дополнительные servlet-ы, вероятно вам придется внести изменения в файл web.xml. После этого надо перезапустить сервер, чтобы изменения вступили в силу. 
+Заключение 
+В этой статье было рассказано как создать среду разработки для написания end-to-end Java приложений. Первая часть была посвящена созданию среды разработки, а вторая - настройке локального сервера и развертыванию servlet-а. Затем вы произвели подключение из MIDlet-а к servlet-у через HTTP протокол. Эта статья отркывает перед вами великолепные возможности по создания мощных end-to-end Java приложений. MIDP клиенты относительно небольшие и простые, но благодаря возможности соединиться с servlet-ом, они могут совершать великие дела. 
+Перевод: Arix Запрещается использовать любую часть данного текста без ссылки на источник: www.mobilab.ru

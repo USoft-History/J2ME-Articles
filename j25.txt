@@ -1,0 +1,212 @@
+5 июля 2005 г. - Оптимизация J2ME приложения
+
+
+
+Если что и отличает J2ME приложения от J2SE, так это ограниченная среда выполнения. Основное ограничение связано с размером памяти, доступной для хранения и использования J2ME приложением. Многие устройства устанавливают планку на уровне порядка 50K или даже меньше - согласитесь это далеко не те объемы, которые доступны в среде J2SE. Практика показывает, что очень просто выйти за рамки этого ограничения. Я хочу поделиться с Вами несколькими приемами, которые помогут уменьшить размер Вашего приложения. Рассмотрим пример. Будем минимизировать размер следующего MIDlet-а. Он выводит текст на экран и пикает когда что-нибудь меняется. 
+
+package com.j2medeveloper.techtips;
+
+import javax.microedition.lcdui.*;
+
+public class BeforeSizeOptimization extends 
+                                         BasicMIDlet {
+
+    public static final Command exitCommand =
+                         new Command( "Exit",
+                                    Command.EXIT, 1 ); 
+
+    public BeforeSizeOptimization(){
+    }
+
+    protected void initMIDlet(){
+        getDisplay().setCurrent( new MainForm() );
+    }
+
+    public class MainForm extends Form {
+        public MainForm(){
+            super( "MainForm" );
+
+            addCommand( exitCommand );
+            append( textf );
+
+            setCommandListener( new CommandListener(){
+                public void commandAction( Command c,
+                                       Displayable d ){
+                    if( c == exitCommand ){
+                        exitMIDlet();
+                    }
+                }
+              }
+            );
+
+            setItemStateListener( 
+                              new ItemStateListener() {
+                public void itemStateChanged( 
+                                           Item item ){
+                    if( item == textf ){
+                        AlertType.INFO.playSound(
+                                        getDisplay() );
+                    }
+                }
+              }
+            );
+        }
+
+        private TextField textf =
+                  new TextField( "Type anything", null,
+                                 20, 0 );
+
+    }
+}
+
+Несмотря на то, что мы будем работать с конкретным примером, описанные ниже приемы подойдут для оптимизации размера любого J2ME приложения. 
+
+Заметьте, что класс, показанный ниже, опирается на следующий удобный класс: 
+
+package com.j2medeveloper.techtips;
+
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+
+public abstract class BasicMIDlet extends MIDlet {
+
+    private Display display;
+
+    public BasicMIDlet(){
+    }
+
+    protected void destroyApp( boolean unconditional )
+                    throws MIDletStateChangeException {
+        exitMIDlet();
+    }
+
+    public void exitMIDlet(){
+        notifyDestroyed();
+    }
+
+    public Display getDisplay(){ return display; }
+
+    protected abstract void initMIDlet();
+
+    protected void pauseApp(){
+    }
+
+    protected void startApp()
+                    throws MIDletStateChangeException {
+        if( display == null ){ 
+            display = Display.getDisplay( this );
+            initMIDlet();
+        }
+    }
+
+}
+
+Когда мы произведем сборку проекта в J2ME Wireless Toolkit, размер полученного пакета будет составлять примерно 4k. 
+
+Первым шагом на пути уменьшения размера приложения будет удаление второстепенных классов за счет уменьшения функциональности проекта. Задайте себе вопрос, действительно ли необходимы вашему приложению все реализованные возможности? Может ли пользователь обойтись без всего этого "звона и свиста"? Постройте как можно более компактную версию приложения. Мы ничего не будем убирать из нашего примера, поскольку он и так очень компактен. 
+
+Второй шаг - объединение классов. Теперь давайте более подробно рассмотрим все классы, определяемые в приложении, особенно анонимные классы. Помните, использование даже самого простого класса приводит к возникновению "накладных расходов". 
+
+public class foo 
+{
+    // ionoi
+}
+
+Откомпилируйте этот класс, и Вы получите файл размером 200 байт. Часто анонимные классы используются для прослушивания событий. Наш MIDlet осуществляет этим методом два прослушивания. Простейшей оптимизацией будет выполнение интерфейсов CommandListener и ItemStateListener в главном классе MIDlet-а. Перенесем туда код прослушивания (который при всем желании нельзя назвать ненужным или второстепенным). Помните о том, что сложные объекты могут использовать одно и то же прослушивание. Используйте передаваемые методам commandAction и itemStateChanged аргументы для их различия. 
+
+Внутренние классы также раздувают код. Компилятор должен создавать специальные переменные и методы, чтобы обеспечить доступ внутренних классов к приватной информации. 
+
+Третий шаг - максимизация использования предустановленных классов. Например, в профилях, построенных на CLDC, не формируются ваши собственные наборы классов. Используйте встроенные Hashtable и Vector классы и работайте в рамках их ограничений. То же самое происходит при создании форм в MIDP приложениях. Простой MIDlet определяет подкласс Form для создания главной формы, но ее можно было создать и непосредственно: 
+
+mainForm = new Form( "MainForm" );
+mainForm.addCommand( okCommand );
+mainForm.setCommandListener( listener );
+
+Четвертый шаг - свертывание иерархии наследования вашего приложения. Возможно, Вы разложили свой код на один или несколько абстрактных классов. Эта методика используется объектно-ориентированными разработчиками, если они хотят использовать написанный код в нескольких приложениях. Это может противоречить тому, что Вы слышали раньше, но упрощение иерархии имеет смысл. Особенно это актуально в случае, если Ваш абстрактный класс, который мог быть перенесен из другого приложения, имеет всего один субкласс. Например, рассмотренный выше MIDlet, являющийся потомком класса BasicMIDlet может быть легко с ним объединен. 
+
+Пятый шаг - укоротите названия Ваших пакетов, классов, методов и переменных. Это может показаться неоправданной тратой времени, но класс содержит огромное количество символьной информации. Укорачивая названия Вы сокращаете размер файла класса. Конечно, вы сэкономите не так много места, но если Ваш проект содержит несколько файлов класса, экономия будет ощутима. Названия пакетов наиболее пригодны для сокращения. Поскольку MIDP приложения полностью изолированы друг от друга. Вы можете не беспокоиться, что возникнут конфликты с другими приложениями устройства. Простой MIDlet может быть извлечен из пакета com.j2medeveloper.techtips. 
+
+Операцию по сокращению длины названий не нужно проводить вручную. Вы можете воспользоваться специальным инструментом, называемым "obfuscator", который сделает это за Вас. Основное назначение obfuscator-а - "скрыть" код приложения, сделав его нечитаемым при декомпиляции. Побочным эффектом является сокращение размера приложения. Это связано с тем, что сокрытие делается за счет переименования методов и переменных. Одним из бесплатных obfuscator-ов является RetroGuard. Когда Вы используете obfuscator для CLDC профиля, помните, что его нужно применять до шага preverification (предпроверка). В противном случае данные, хранящиеся в файлах классов, будут повреждены. 
+
+Под конец давайте подробно рассмотрим процесс инициализации массивов. Когда происходит компилирование, инициализация массива, показанная ниже 
+
+int arr[] = { 0, 1, 2, 3 };
+
+фактически генерирует код аналогичный этому: 
+
+arr[0] = 0;
+arr[1] = 1;
+arr[2] = 2;
+arr[3] = 3;
+
+Чтобы убедиться в этом, воспользуйтесь утилитой javap, которая входит в состав Java 2 SDK и предназначена для декомпиляции двоичного кода в файл класса (используйте ключ -c). Вы будите неприятно удивлены увиденным, особенно если Вы использовали двоичное копирование постоянных данных. Для решения этой проблемы существуют два альтернативных подхода: 1. представить данные в виде строки, а во время выполнения программы декодировать ее в массив; 2. сохранить данные в виде двоичного файла, поместить его в jar архив приложения, а во время выполнения приложения загрузить из него данные с помощью метода getResourceAsStream. 
+
+Все приведенное выше не более чем рекомендации. В конкретных случаях некоторые шаги могут оказаться бесполезными. Ниже приводится оптимизированная версия нашего MIDlet-а: 
+
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+
+public class ASO extends MIDlet
+                 implements CommandListener,
+                            ItemStateListener {
+
+    private Display display;
+    private Form mainForm;
+    private TextField mainFormTF =
+                  new TextField( "Type anything", null,
+                                 20, 0 );
+
+    public static final Command exitCommand =
+                         new Command( "Exit",
+                                     Command.EXIT, 1 ); 
+
+    public ASO(){
+    }
+
+    public void commandAction( Command c,
+                               Displayable d ){
+        if( c == exitCommand ){
+            exitMIDlet();
+        }
+    }
+
+    protected void destroyApp( boolean unconditional )
+                    throws MIDletStateChangeException {
+        exitMIDlet();
+    }
+
+    public void exitMIDlet(){
+        notifyDestroyed();
+    }
+
+    public Display getDisplay(){ return display; }
+
+    protected void initMIDlet(){
+        mainForm = new Form( "MainForm" );
+        mainForm.addCommand( exitCommand );
+        mainForm.setCommandListener( this );
+        mainForm.setItemStateListener( this );
+        mainForm.append( mainFormTF );
+
+        getDisplay().setCurrent( mainForm );
+    }
+
+    public void itemStateChanged( Item item ){
+        if( item == mainFormTF ){
+            AlertType.INFO.playSound( getDisplay() );
+        }
+    }
+
+    protected void pauseApp(){
+    }
+
+    protected void startApp()
+                    throws MIDletStateChangeException {
+        if( display == null ){ 
+            display = Display.getDisplay( this );
+            initMIDlet();
+        }
+    }
+}
+
+

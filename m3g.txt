@@ -1,0 +1,304 @@
+4 июля 2005 г. - Использование 3D графики в J2ME. M3G модели
+
+
+3D Редакторы
+
+Пожалуй, самым известным 3D редактором нашей стране является 3D Studio Max. С его помощью можно экспортировать созданные модели и сцены в M3G формат (формат, используемой спецификацией JSR 184). Этот специальный формат был создан специально для использования на мобильных устройствах. Единственным минусом 3D Studio Max является его дорогая цена. 
+
+Фирма Superscape выпускает линейку продуктов под названием Swerve (Swerve Studio, Swerve Client и Swerve Content). Эти программы предназначены для использования Java 3D программистами. К сожалению Swerve Studio доступно ограниченному кругу разработчиков, тесно работающих с Superscape. 
+
+Есть еще одно решение: свободно распространяемая и абсолютно бесплатная программа Blender. Blender - мощный 3D редактор с открытым кодом. Он может использоваться для любых видов 3d дизайна - от простого моделирования до создания сложных анимационных роликов. Хотя в настоящее время Blender не поддерживает формат M3G, ситуация очень скоро может измениться (поскольку Blender является открытым проектом). 
+Модели
+
+Как использовать M3G файлы в MIDP приложениях? Прежде всего нужен сам M3G файл, содержащий 3D модель. Вы можете найти модели в этом формате, используя Google, или воспользоваться файлами, распространяемыми в составе Wireless Toolkit 2.2 (в папке Demo3D). В этой статье мы будем использовать немного измененный(упрощенный) пример Pogoroo, поставляемой Sun. не будем мудрить, а просто отобразим объект на экране. 
+Загрузка Мира
+
+Первым делом мы должны загрузить мир из M3G файла. В pogoroo.m3g содержится кенгуру и зеленое поле. В приведенном ниже листинге показана загрузка мира. Для этого использовался метод load()
+
+Листинг 1. Загрузка Мира
+
+try {
+ // загружаем Мир из M3D файла
+ myWorld = (World)Loader.load("/pogoroo.m3g")[0];
+ getObjects();
+ setupAspectRatio();
+}
+catch(Exception e) {
+ e.printStackTrace();
+}
+Выделение объекта из Мира
+
+Мир загружен, теперь нужно взять его объекты (см. Листинг 2). Загруженный нами Мир имеет четыре объекта, причем одним из них является информация об анимации. Для выделения объекта используется метод find().
+
+Листинг 2. Выделение объекта из Мира
+
+try {
+ tRoo      = (Group) myWorld.find(POGOROO);
+ tCams     = (Group) myWorld.find(CAMERA);
+ acRoo = (Group) myWorld.find(TRANSFORM);
+ animRoo = (AnimationController) myWorld.find(ROO);
+
+ // получаем длительность анимации
+ AnimationTrack track = acRoo.getAnimationTrack(0);
+ animLength = 1000; // по умолчанию длительность 1 секунда
+ if (track != null) {
+  KeyframeSequence ks = track.getKeyframeSequence();
+  if (ks != null) animLength = ks.getDuration();
+ }
+
+ }
+catch(Exception e) {
+  e.printStackTrace();
+}
+Установка коэффициента сжатия
+
+Для того чтобы рендеринг объекта происходил корректно, необходимо установить коэффициент сжатия. Эту часть кода я не трогал и она полностью соответствует примеру Sun. Сначала проверяется размер canvas, затем на основании типа камеры вычисляется коэффициент сжатия.
+
+Листинг 3. Установка коэффициента сжатия
+
+void setupAspectRatio() {
+ viewport_x = 0;
+ viewport_y = 0;
+ viewport_width = myCanvas.getWidth();
+ viewport_height = myCanvas.getHeight();
+ Camera cam = myWorld.getActiveCamera();
+ float[] params = new float[4];
+ int type = cam.getProjection(params);
+ if(type != Camera.GENERIC) {
+  //Вычисляем коэффициент сжатия
+  float waspect=viewport_width/viewport_height;
+  if (waspect<params[1]) {
+   float height = viewport_width/params[1];
+   viewport_height=(int)height;
+   viewport_y=(myCanvas.getHeight()-viewport_height)/2;
+  }
+  else {
+   float width = viewport_height*params[1];
+   viewport_width=(int)width;
+   viewport_x=(myCanvas.getWidth()-viewport_width)/2;
+  }
+ }
+}
+Обновление вида
+
+Для того чтобы обновить вид, необходимо использовать TimerTask для вызова метода repaint(). Другой путь - непосредственно использовать Thread и ExampleCanvas.
+
+Листинг 4. Обновление вида
+
+private class RefreshTask extends TimerTask
+{
+ public void run(){
+  if(myCanvas != null && myGraphics3D != null && myWorld != null) {
+ int startTime = (int)System.currentTimeMillis();
+ int validity = myWorld.animate(startTime);
+ myCanvas.repaint(viewport_x, viewport_y, viewport_width, 
+   viewport_height);
+  }
+ }
+}
+Полный код примера
+
+В приведенном ниже листинге Вы видите полный код приложения. Он достаточно длинный, но все же намного проще кода примера Sun. Можете попрактиковаться в MIDP программировании и добавить сюда логику и движение.
+
+Листинг 5. Полный код примера
+
+package com.kontio;
+
+import javax.microedition.midlet.*;
+import javax.microedition.lcdui.*;
+import java.lang.IllegalArgumentException;
+import java.io.*;
+import java.util.*;
+import javax.microedition.m3g.*;
+
+public class Example3D extends MIDlet implements CommandListener{
+ // ID объектов, используемых в сцене.
+ static final int POGOROO = 554921620;
+ static final int CAMERA = 769302310;
+ static final int TRANSFORM = 347178853;
+ static final int ROO = 418071423;
+
+ private Display myDisplay = null;
+ private ExampleCanvas myCanvas = null;
+
+ private Timer myRefreshTimer = new Timer();
+ private TimerTask myRefreshTask = null;
+
+ private Command exitCommand = new Command("Exit", Command.ITEM, 1);
+
+ Graphics3D myGraphics3D = Graphics3D.getInstance();
+ World myWorld = null;
+
+ private AnimationController animRoo = null;
+ private Group tRoo = null;
+ private Group tCams = null;
+ private Group acRoo = null;
+
+ private int animLength = 0;
+
+ int viewport_x;
+ int viewport_y;
+ int viewport_width;
+ int viewport_height;
+
+ public Example3D(){
+  super();
+  myDisplay = Display.getDisplay(this);
+  myCanvas = new ExampleCanvas(this);
+  myCanvas.setCommandListener(this);
+  myCanvas.addCommand(exitCommand);
+ }
+
+ public void startApp() throws MIDletStateChangeException{
+  myDisplay.setCurrent(myCanvas);
+
+  try{
+   // загружаем Мир из M3D файла
+   myWorld = (World)Loader.load("/pogoroo.m3g")[0];
+   getObjects();
+   setupAspectRatio();
+  }
+  catch(Exception e){
+   e.printStackTrace();
+  }
+
+  myRefreshTask = new RefreshTask();
+
+  // Задаем таймер, чтобы получить 20 кадров в секунду.
+  myRefreshTimer.schedule(myRefreshTask, 0, 50);
+ }
+
+ void setupAspectRatio(){
+  viewport_x = 0;
+  viewport_y = 0;
+  viewport_width = myCanvas.getWidth();
+  viewport_height = myCanvas.getHeight();
+
+  Camera cam = myWorld.getActiveCamera();
+
+  float[] params = new float[4];
+  int type = cam.getProjection(params);
+  if(type != Camera.GENERIC){
+   //вычисляем коэффициент сжатия
+   float waspect=viewport_width/viewport_height;
+
+   if (waspect<params[1]){
+    float height = viewport_width/params[1];
+    viewport_height=(int)height;
+    viewport_y=(myCanvas.getHeight()-viewport_height)/2;
+   }
+   else{
+    float width = viewport_height*params[1];
+    viewport_width=(int)width;
+    viewport_x=(myCanvas.getWidth()-viewport_width)/2;
+   }
+  }
+ }
+
+ public void getObjects(){
+  try{
+   tRoo = (Group) myWorld.find(POGOROO);
+   tCams = (Group) myWorld.find(CAMERA);
+   acRoo = (Group) myWorld.find(TRANSFORM);
+   animRoo = (AnimationController) myWorld.find(ROO);
+
+   // получаем продолжительность анимации
+   AnimationTrack track = acRoo.getAnimationTrack(0);
+   animLength = 1000; // по умолчанию - 1 секунда.
+   if (track != null){
+     KeyframeSequence ks = track.getKeyframeSequence();
+    if (ks != null)
+     animLength = ks.getDuration();
+   }
+
+  }
+  catch(Exception e){
+   e.printStackTrace();
+  }
+ }
+
+ public void pauseApp(){
+ }
+
+ public void destroyApp(boolean unconditional) throws 
+        MIDletStateChangeException{
+  myRefreshTimer.cancel();
+  myRefreshTimer = null;
+  myRefreshTask = null;
+ }
+
+ public void paint(Graphics g){
+  if(g.getClipWidth() != viewport_width ||
+    g.getClipHeight() != viewport_height ||
+    g.getClipX() != viewport_x ||
+    g.getClipY() != viewport_y){
+   g.setColor(0x00);
+   g.fillRect(0, 0, myCanvas.getWidth(), myCanvas.getHeight());
+  }
+
+  if ((myGraphics3D != null) && (myWorld != null)){
+   myGraphics3D.bindTarget(g);
+   myGraphics3D.setViewport(viewport_x, viewport_y, 
+               &n bsp; viewport_width, viewport_height);
+   myGraphics3D.render(myWorld);
+   myGraphics3D.releaseTarget();
+  }
+ }
+
+ public void commandAction(Command cmd, Displayable disp)
+ {
+  if (cmd == exitCommand){
+   try{
+    destroyApp(false);
+    notifyDestroyed();
+   }
+   catch(Exception e){
+    e.printStackTrace();
+   }
+  }
+ }
+
+ private class RefreshTask extends TimerTask{
+  public void run(){
+   if(myCanvas !=null && myGraphics3D != null && myWorld != null{
+    int startTime = (int)System.currentTimeMillis();
+    int validity = myWorld.animate(startTime);
+    myCanvas.repaint(viewport_x, viewport_y, 
+               vie wport_width, viewport_height);
+   }
+  }
+ }
+
+ class ExampleCanvas extends Canvas{
+  Example3D myRooMIDlet;
+  int i = 0;
+
+  ExampleCanvas(Example3D Testlet) { myRooMIDlet = Testlet; }
+
+  void init() { }
+
+  void destroy() { }
+
+  protected void paint(Graphics g) { myRooMIDlet.paint(g); }
+
+  protected void keyPressed(int i) { }
+
+  protected void keyReleased(int i) { }
+
+  protected void keyRepeated(int i) { }
+
+  protected void pointerDragged(int x, int y) { }
+
+  protected void pointerPressed(int x, int y) { }
+
+  protected void pointerReleased(int x, int y) { }
+ }
+}
+
+Результат выполнения программы показан на рисунке
+
+Заключение
+
+Итак, Вы только что познакомились с наиболее используемым способом создания 3D приложений на основе JSR 184 (Mobile 3D API). Дизайнер, используя различные средства, создает 3d модели "Мира", а затем экспортирует модели в M3G файлы. Приложение просто загружает модель и рисует вид мира на экране.
+
+Ознакомьтесь с первой частью данного документа: Использование 3D графики в J2ME. Простейшее 3D приложение.

@@ -1,0 +1,146 @@
+30 марта 2005 г. - Использование таймера
+
+
+
+
+
+Часто в программе нужно выполнять какие-то действия (дальше будем их называть задачами) периодически или согласно расписанию. J2ME поддерживает механизм, облегчающий реализацию этой задачи. Я говорю о таймере. Для того чтобы им воспользоваться, необходимо использовать два класса: java.util.TimerTask  и  java.util.Timer. Класс TimerTask является абстрактным, и служит основой для всех  выполняемых по расписанию задач. Класс Timer обеспечивает создание и управление потоками, на которых выполняются эти задачи.
+
+Наша задача должна быть реализована в субклассе класса TimerTask в методе run():
+
+---
+import java.util.*;
+
+public class MyTask extends TimerTask {
+    public void run() {
+        System.out.println( "Запуск задачи" );
+    }
+}
+---
+В данном случае наша задача сводится к выведению строки на экран.
+
+Класс TimerTask реализует java.lang.Runnable интерфейс. Написанный нами метод должен вызываться из класса Timer. Критичным параметром для него является скорость выполнения, ведь в данный момент может выполняться лишь одна задача, а периодически запускаемый громоздкий и медленный код может существенно затормозить всю систему.
+
+После того, как задача запрограммирована, необходимо задать расписание ее выполнения. Для этого с помощью метода  schedule() создается интерфейс класса Timer.
+
+---
+import java.util.*;
+
+Timer     timer = new Timer();
+TimerTask task = new MyTask();
+
+// Ждать десять секунд, прежде чем выполнить task()...
+timer.schedule( task, 10000 );
+
+// Ждать пять секунд перед выполнением task, 
+// а затем выполнять каждые 10 секунд
+timer.schedule( task, 5000, 10000 );
+---
+
+Вы можете задать расписание четырех типов: выполнять задачу в строго отведенное время (используется объект Date), после некоторой задержки (в миллисекундах), через определенные промежутки времени, через определенные промежутки времени после заданного начального момента времени (реализуется с помощью метода scheduleAtFixedRate) Если по каким, то причинам выполнение задачи отсрочено (скажем из-за уборки мусора),  два или более последующих выполнения будут происходить через меньшие интервалы времени, чтобы наверстать упущенное и войти в первоначально намеченный график.
+
+Каждый объект Timer создает и управляет лишь одним фоновым потоком. Большинству приложений вполне достаточно одного таймера, но Вы можете использовать любое их количество. Остановить таймер  и уничтожить его поток можно, вызвав метод cancel(). Имейте в виду, остановленный таймер уже не может быть перезапущен - Вам придется создать новый и заново ввести расписание задач. Timer использует безопасные потоки, это значит, что Вам не надо выполнять их синхронизацию при использовании таймера из разных потоков.
+
+Остановка таймера часто осуществляется внутри метода нашей задачи (метод run()). Вызов метода cancel() внутри run() гарантирует, что текущее выполнение задачи является последним. Однако Вы можете вызвать cancel() в любом месте программы. 
+
+Ниже приведен простой пример, который использует таймер для создания заставки» звездный полет". Звезды рисуются как точки с помощью низкоуровневого графического API.
+
+---
+import javax.microedition.midlet.*;
+import javax.microedition.lcdui.*;
+import java.util.*;
+
+public class TimerDemo extends MIDlet {
+
+    Display    display;
+    StarField  field = new StarField();
+    FieldMover mover = new FieldMover();
+    Timer      timer = new Timer();
+
+    public TimerDemo() {
+        display = Display.getDisplay( this );
+    }
+
+    protected void destroyApp( boolean unconditional ) {
+    }
+
+    protected void startApp() {
+        display.setCurrent( field );
+        timer.schedule( mover, 100, 100 );
+    }
+
+    protected void pauseApp() {
+    }
+
+    public void exit(){
+        timer.cancel(); // остановить полет
+        destroyApp( true );
+        notifyDestroyed();
+    }
+
+    class FieldMover extends TimerTask {
+        public void run(){
+            field.scroll();
+        }
+    }
+
+    class StarField extends Canvas {
+        int        height;
+        int        width;
+        int[]      stars;
+        Random     generator = new Random();
+        boolean    painting = false;
+
+        public StarField(){
+            height      = getHeight();
+            width       = getWidth();
+            stars       = new int[ height ];
+
+            for( int i = 0; i < height; ++i ){
+                stars[i] = -1;
+            }
+        }
+
+        public void scroll() {
+            if( painting ) return;
+
+            for( int i = height-1; i > 0; --i ){
+                stars[i] = stars[i-1];
+            }
+
+            stars[0] = ( generator.nextInt() %
+                                ( 3 * width ) ) / 2;
+            if( stars[0] >= width ){
+                stars[0] = -1;
+            }
+
+            repaint();
+        }
+
+        protected void paint( Graphics g ){
+            painting = true;
+
+            g.setColor( 0, 0, 0 );
+            g.fillRect( 0, 0, width, height );
+
+            g.setColor( 255, 255, 255 );
+
+            for( int y = 0; y < height; ++y ){
+                int x = stars[y];
+                if( x == -1 ) continue;
+
+                g.drawline( x, y, x, y );
+            }
+
+            painting = false;
+        }
+
+        protected void keypressed( int keycode ){
+            exit();
+        }
+    }
+}
+
+---
+
+Этот MIDlet использует объект Timer. Метод FieldMover выполняется каждые 100 миллисекунд. Он обновляет и перерисовывает звездное небо, опуская все звезды вниз на каждом интервале. Это создает иллюзию космического полета.

@@ -1,0 +1,381 @@
+20 января 2006 г. - MIDP 2.0: Работа с точками изображения напрямую, прозрачность, drawRGB()
+
+
+Введение
+
+В этом документе описывается работа с изображениями, сохраненными в виде массива точек. В частности рассматриваются следующие вопросы: 
+Формат массива данных, содержащего информацию о рисунке. 
+Различия между непрозрачными и прозрачными точками. 
+Использование метода drawRGB(). 
+Создание и загрузка изображения в массив. 
+Создание объекта Image из массива. 
+Манипуляция отдельными точками. 
+
+Вообще, использование MIDP 2.0 позволяет значительно улучшить графическую составляющую игры, а также реализовать сложные сетевые модели взаимодействия. 
+ARGB Image
+
+MIDP 2.0 позволяет представлять изображение в виде массива целых чисел, и трансформировать его, воздействуя на отдельные элементы массива. Каждый элемент массива соответствует одному пикселю. Число, содержащееся в элементе массива, определяется следующим образом: 
+8 бит:(A) Альфа составляющая, отвечающая за прозрачность
+8 бит:(R) Красный
+8 бит:(R) Зеленый
+8 бит:(R) Синий
+
+На приведенном ниже рисунке схематично показан формат числа1	1	1	1	1	1	1	1	0	0	0	0	0	0	0	0	0	1	0	1	0	1	0	1	1	0	1	0	1	0	1	0
+
+
+Каждое такое восьмибитное значение обычно называют каналом. Временно не будем трогать первые 8 бит. Красному каналу (вторые 8 бит) на представленной схеме соответствует число 0000 0000 (Ox00), зеленому - 0101 0101 (Ox55), синему - 1010 1010 (OxAA). Таким образом, каждый канал может содержать любое число в пределах от 0 до 255. 
+Альфа канал
+
+Сохраненное в виде массива чисел изображение обычно имеет ARGB формат. RGB - соответствуют красному, зеленому и синему каналам, а A - альфа каналу, отвечающему за прозрачность пикселя. Так непрозрачной точке соответствует альфа канал 1111 1111 (OxFF), а прозрачной - 0000 0000 (Ox00). На приведенном ниже рисунке показаны различия между непрозрачными и прозрачными точками. 
+
+Приведенный код создает и выводит на экран три ARGB изображения. Особое внимание стоит обратить на заполнение массива точек изображения, в частности на значения Альфа канала, отвечающего за прозрачность. 
+
+public void paint(Graphics g)
+{
+     ...
+     int x = 0, y = 0; // Координаты рисунка на экране
+     int width = 35, height = 35; // Размер рисунка
+     // Создаем массив для рисунка
+     if(pixelArray == null) pixelArray = new int[width * height];
+     // Создаем непрозрачный рисунок (красный квадрат)
+     for(int i = 0; i < pixelArray.length; i++)
+          pixelArray[i] = 0xffff0000;
+     g.drawRGB(pixelArray, 0, width, x, y, width, height, false);
+     g.drawRect(x, y, width, height); // Рисуем прямоугольник (рамка)
+     
+     // Создаем полупрозрачный красный квадрат
+     x = 35;
+     y = 35;
+     for(int i = 0; i < pixelArray.length; i++)
+          pixelArray[i] = 0x7fff0000;
+     g.drawRGB(pixelArray, 0, width, x, y, width, height, true);
+     g.drawRect(x, y, width, height); // Рисуем прямоуголькик (рамка)
+
+     // Создаем прозрачный красный квадрат
+     x = 70;
+     y = 70;
+     for(int i = 0; i < pixelArray.length; i++)
+          pixelArray[i] = 0x00ff0000;
+     g.drawRGB(pixelArray, 0, width, x, y, width, height, true);
+     g.drawRect(x, y, width, height); // Рисуем прямоуголькик (рамка)
+}
+
+
+Метод drawRGB()
+
+Метод drawRGB() появился в MIDP 2.0. Он предназначен для вывода изображений, сохраненных в виде массива пикселей. Метод имеет следующий формат: 
+
+drawRGB(int[] rgbData, //Массив с ARGB данными
+        int offset, //Смещение от начала массива на 
+                      //первую точку изображения
+        int scanlength, //Число точек в строке изображения
+        int x, //Координата x изображения на экране
+        int y, //Координата y изображения на экране
+        int width, //Ширина изображения
+        int height, //Высота изображения
+        boolean processAlpha) //false если все точки непрозрачные
+
+Параметры scanlength и processAlpha требуют разъяснения. При выводе изображения на экран система должна знать, сколько точек содержится в строке рисунка. В приведенном выше примере значение scanlength равно 35. Если Вы не хотите использовать прозрачность, то можете не возиться с Альфа каналом точек, а просто установить значение processAlpha в false; в противном случае, processAlpha должно иметь значение true. 
+Создание ARGB изображения
+
+Давайте с помощью массива точек создадим изображение. Будем рисовать красный шарик размером 10x10 точек. 
+
+
+
+Прежде чем двигаться дальше, посмотрим, как будет выглядеть изображение, без использования альфа канала. Мы отчетливо видим черный фон вокруг красного шарика. 
+
+
+
+А вот такого эффекта можно достичь, если определить черные точки как прозрачные. 
+
+
+
+Чтобы определить размер требуемого массива нужно просто умножить ширину рисунка на его высоту: 
+
+// Объявляем массив для нашего рисунка
+int ballWidth = 10, ballHeight = 10;
+if(pixelArray == null) pixelArray = new int[ballWidth * ballHeight];
+
+Теперь построчно задаем точки рисунка. Не забываем про альфа канал, делая черные точки прозрачными, а все остальные - непрозрачными. 
+
+// Верхний ряд прозрачный
+int i = 0;
+int j = 0;
+for(; i < ballWidth; i++)
+pixelArray[i] = 0x00000000; // Black, transparent
+//Второй ряд
+for(j = 0; j < 3; i++, j++)
+pixelArray[i] = 0x00000000; // Черная точка прозрачна 
+pixelArray[i++] = 0xffff0000; // 255, 0, 0
+pixelArray[i++] = 0xffd30000; // 211, 0, 0
+pixelArray[i++] = 0xffff0000; // 255, 0, 0
+pixelArray[i++] = 0xffdb0000; // 219, 0, 0
+pixelArray[i++] = 0xff870000; // 135, 0, 0
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+//Третий ряд
+for(j = 0; j < 2; i++, j++) // Черная точка прозрачна
+pixelArray[i] = 0x00000000;
+pixelArray[i++] = 0xffc30000; // 195, 0, 0
+for(j = 0; j < 6; i++, j++) // 255, 0, 0
+pixelArray[i] = 0xffff0000;
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+// Четвертый ряд
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+pixelArray[i++] = 0xff800000; // 128, 0, 0
+for(j = 0; j < 7; i++, j++) // 255, 0, 0
+pixelArray[i] = 0xffff0000;
+pixelArray[i++] = 0xff870000; // 135, 0, 0
+// Пятый ряд
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+pixelArray[i++] = 0xffd30000; // 211, 0, 0
+for(j = 0; j < 7; i++, j++) // 255, 0, 0
+pixelArray[i] = 0xffff0000;
+pixelArray[i++] = 0xffdb0000; // 219, 0, 0
+// Шестой ряд
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+for(j = 0; j < 9; i++, j++) // 255, 0, 0
+pixelArray[i] = 0xffff0000;
+// Седьмой ряд
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+pixelArray[i++] = 0xffd30000; // 211, 0, 0
+for(j = 0; j < 7; i++, j++) // 255, 0, 0
+pixelArray[i] = 0xffff0000;
+pixelArray[i++] = 0xffdb0000; // 219, 0, 0
+// Восьмой ряд
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+pixelArray[i++] = 0xff800000; // 128, 0, 0
+for(j = 0; j < 7; i++, j++) // 255, 0, 0
+pixelArray[i] = 0xffff0000;
+pixelArray[i++] = 0xff870000; // 135, 0, 0
+// Девятый ряд
+for(j = 0; j < 2; i++, j++) // Черная точка прозрачна
+pixelArray[i] = 0x00000000;
+pixelArray[i++] = 0xffc30000; // 195, 0, 0
+for(j = 0; j < 6; i++, j++) // 255, 0, 0
+pixelArray[i] = 0xffff0000;
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+// Десятый ряд
+for(j = 0; j < 3; i++, j++)
+pixelArray[i] = 0x00000000; // Черная точка прозрачна
+pixelArray[i++] = 0xffff0000; // 255, 0, 0
+pixelArray[i++] = 0xffd30000; // 211, 0, 0
+pixelArray[i++] = 0xffff0000; // 255, 0, 0
+pixelArray[i++] = 0xffdb0000; // 219, 0, 0
+pixelArray[i++] = 0xff870000; // 135, 0, 0
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+pixelArray[i++] = 0x00000000; // Черная точка прозрачна
+
+Чтобы вывести это изображение на экран разработчик должен вызвать метод drawRGB() внутри метода paint() 
+
+private int ballX = 50, ballY = 80;
+...
+public void paint(Graphics g)
+{
+     ...
+          g.drawRGB(pixelArray, 0, ballWidth, ballX, ballY, ballWidth, ballHeight, true);
+     ...
+} 
+
+Замечание. Не забывайте устанавливать параметр processAlpha метода drawRGB() в true. В противном случае альфа канал будет игнорироваться, даже если Вы его зададите. 
+Создание объекта Image из ARGB рисунка
+
+После того как создан и заполнен массив точек, разработчик в любой момент может создать на его основании объект Image и работать с ним как с обычным рисунком.
+
+int ballWidth = 10, ballHeight = 10;
+// Задаем массив для ARGB рисунка
+if(pixelArray == null) pixelArray = new int[ballWidth * ballHeight];
+
+// Задаем каждую строку рисунка(см. код выше)
+int i = 0, j = 0;
+for(; i < ballWidth; i++)
+     pixelArray[i] = 0x00000000; // Черные точки прозрачны
+...
+
+// Создаем объект Image на основании ARGB массива.
+Image rgbImage;
+int ballX = 50, ballY = 80;
+rgbImage = Image.createRGBImage(pixelArray, ballWidth, ballHeight, true);
+
+// Выводим рисунок на экран, пользуясь 
+// стандартным методом объекта Image.
+g.drawImage(rgbImage, 0, 0, Graphics.LEFT | Graphics.TOP);
+
+Иногда бывает просто необходимо иметь именно Image, а не ARGB массив. Например, компоненты ChoiceGroup или List могут отображать рисунки, но только если они представлены Image объектом. 
+Модификация точек ARGB изображения
+
+Одним из преимуществ использования ARGB массивов - возможность модифицировать изображение прямо в процессе выполнения программы. Приведем простой пример. Будем выводить на экран два изображения одно поверх другого. Второе изображение представлено ARGB массивом. На приведенном ниже рисунке показаны оба изображения. 
+
+
+
+Итак, сначала ARGB изображение будет непрозрачным, затем с помощью таймера (объект Timer) будем постепенно делать точки прозрачными. Таким образом, расположенное снизу изображение будет постепенно проявляться на экране. 
+
+
+
+В случае если пользователь нажмет кнопку, все точки верхнего рисунка станут прозрачными и таймер остановится. 
+DrawRGB_MIDlet.java - главный класс мидлета
+
+/*--------------------------------------------------
+* DrawRGB_MIDlet
+*-------------------------------------------------*/
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+public class DrawRGB_MIDlet extends MIDlet
+{
+   private Display display;
+   private DrawRGB_Canvas rgbImage;
+
+   public DrawRGB_MIDlet()
+      {
+      // Создаем экземпляр canvas
+      rgbImage = new DrawRGB_Canvas(this);
+      display = Display.getDisplay(this);
+      }
+   public void startApp()
+      {
+      display.setCurrent(rgbImage);
+      }
+   public void pauseApp()
+      {
+      }
+   public void destroyApp(boolean unconditional)
+      {
+      }
+   public void exitMIDlet()
+      {
+      destroyApp(true);
+      notifyDestroyed();
+   } 
+}
+DrawRGB_Canvas.java - класс создает и выводит на экран рисунок
+
+/*--------------------------------------------------
+* DrawRGB_Canvas
+*-------------------------------------------------*/
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+import java.util.*;
+public class DrawRGB_Canvas extends Canvas implements CommandListener
+   {
+   private int[] pixelArray; // Массив точек
+   private Image image = null; // Нижнее изображение
+   private int boxWidth = 127, boxHeight = 167, // Размер изображения
+   pixelArraySize, // Число точек в массиве
+   displayWidth, displayHeight, // Размер экрана
+   randomPixel; // Случайный пиксел
+   private Command cmExit; // команда Выход
+   private Random random; // Генератор случайных чисел 
+   private Timer tm; // таймер
+   private TimerTask tt; // Задача для выполнения
+   private boolean initComplete = false; // Был ли экран инициализирован
+   DrawRGB_MIDlet midlet; // Главный класс мидлета
+
+   public DrawRGB_Canvas (DrawRGB_MIDlet midlet)
+      {
+      this.midlet = midlet;
+      // Команды
+      cmExit = new Command("Exit", Command.EXIT, 0);
+      addCommand(cmExit);
+      setCommandListener(this);
+
+      displayWidth = getWidth();
+      displayHeight = getHeight();
+      pixelArraySize = boxWidth * boxHeight;
+      // Инициализация генератора случайных чисел
+      random = new java.util.Random();
+      // Считываем нижнее изображение
+      try
+      {
+           image = Image.createImage("/seagull.png");
+           }
+      catch (java.io.IOException e)
+      {
+           System.err.println("Unable to locate or read .png file");
+           }
+      // Создаем прямоугольник закрывающий изображение
+      createBox();
+      // Создаем таймер
+      tm = new Timer();
+      tt = new DrawTask();
+      tm.scheduleAtFixedRate(tt, 0, 1);
+      }
+   /*--------------------------------------------------
+   * Создаем прямоугольник, закрывающий изображение
+   *-------------------------------------------------*/
+   private void createBox()
+      {
+      int red, green, blue, alpha;
+      long tmp;
+      // Определяем массив
+      if(pixelArray == null)
+      {
+           pixelArray = new int[pixelArraySize];
+           // Случайный цвет
+           red = (random.nextInt() >>> 1) % 256;
+           green = (random.nextInt() >>> 1) % 256;
+           blue = (random.nextInt() >>> 1) % 256;
+           alpha = 0xff; // Непрозрачное
+           // Суммируем все в одно число
+           tmp = (alpha << 24) | (red << 16) | (green << 8) | blue;
+           // Создаем верхнее изображение
+           for (int i = 0; i < pixelArraySize; i++)
+           pixelArray[i] = (int) tmp;
+         }
+      }
+   /*--------------------------------------------------
+   * Каждый раз при срабатывании таймера 
+   * меняем прозрачность точек
+   *-------------------------------------------------*/
+   private void updateDisplay()
+      {
+      // Берем случайную точку аерхнего рисунка
+      randomPixel = (random.nextInt() >>> 1) % (pixelArraySize);
+      // Делаем прозрачными 50 точек
+      // Будем следить, чтобы не выйти за пределы массива
+      for (int i = randomPixel, j = 0; j < 50 && i < (pixelArraySize); j++, i++)
+      pixelArray[i] = 0x00000000;
+      }
+   /*--------------------------------------------------
+   * Рисуем картинки
+   *-------------------------------------------------*/
+   public void paint(Graphics g)
+      {
+      if (initComplete == false)
+         {
+           // Белый фон.
+           g.setColor(255, 255, 255);
+           g.fillRect(0, 0, displayWidth, displayHeight);
+           initComplete = true;
+           }
+      // Рисуем нижнее изображение
+      if (image != null)
+      g.drawImage(image, 0, 0, Graphics.LEFT | Graphics.TOP);
+      // Рисуем верхнее изображение
+      g.drawRGB(pixelArray, 0, boxWidth, 0, 0, boxWidth, boxHeight, true);
+      }
+   /*--------------------------------------------------
+   * Если нажата кнопка, останавливаем таймер.
+   *-------------------------------------------------*/
+   protected void keyPressed(int keyCode)
+      {
+      tt.cancel();
+      // Делаем все точки верхнего изображения прозрачными
+      for (int i = 0; i < (pixelArraySize);i++)
+      pixelArray[i] = 0x00000000;
+      repaint();
+      }
+   /*--------------------------------------------------
+   * DrawTask Класс
+   *-------------------------------------------------*/
+   private class DrawTask extends TimerTask
+      {
+      public final void run()
+      {
+         updateDisplay();
+         repaint();
+         }
+      }
+}
+Заключение
+
+Возможность работать с точками изображения напрямую очень гибкий и мощный инструмент. Надеюсь, Вы сможете значительно улучшить свои приложения, воспользовавшись описанными выше приемами.

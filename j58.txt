@@ -1,0 +1,222 @@
+7 апреля 2005 г. - Реализация соединения в CLDC конфигурации
+
+
+
+Судя по названию, конфигурация Connected Limited Device Configuration (CLDC) ориентирована на устройства, обладающие специфическими коммуникационными возможностями. То есть на устройства, которые могут соединяться с внешним миром посредствам последовательного, USB, инфракрасного портов, радио каналов или каким-нибудь другим способом. Использовать все эти возможности можно через набор классов, получивший название Generic Connection Framework (GCF).
+
+GCF состоит из отдельного класса, реализующего механизмы соеджинения, класса исключений, и восьми интерфейсов. Все они входят в пакет javax.microedition.io. Интерфейс моделирует шесть различных типов соединений, начиная с простых односторонних подключений и заканчивая потоковыми соединениями и датаграммными. Эти абстракции образуют основу GCF. Механизм их работы очень похож на механизм доступа к базам данных JDBC.
+
+Чтобы получить соединение любого типа (HTTP, сокет, через инфракрасный или последовательный порт), необходимо использовать статические методы класса Connector. Например, Вы можете вызвать метод open(), который берет URI (однородный индикатор ресурса - более общая форма URL) и возвращают Connection - базовый интерфейс для всех шести типов подключения. Ниже показано как открыть HTTP соединение:
+
+----
+import javax.microedition.io.*;
+
+ContentConnection conn = (ContentConnection) Connector.open("http://www.yahoo.com" );
+----
+
+Аналогично можно открыть файл для чтения:
+
+___
+import javax.microedition.io.*;
+
+InputConnection conn =
+    (InputConnection) Connector.open(
+      "file:/autoexec.bat", Connector.READ );
+___
+
+Существует еще одна форма метода open(), которая указывает нужно ли генерировать исключительную ситуацию по истечении времени ожидания.
+
+Если Вы хотите использовать входящие и исходящие потоки, воспользуйтесь  методами openInputStream, openDataInputStream, openOutputStream и openDataOutputStream, которые значительно упроcтят вашу работу.
+
+URI имеет следующую форму:
+
+<protocol>:<address>;<parameters>
+
+где protocol определяет способ подключения, address - адресата подключения, parameters - параметры соединения. Protocol представляет собой постую текстовую строку, например "http", "mailto", "ftp". Синтаксис других двух параметров зависит от выбранного протокола. Класс Connector использует параметр protocol, чтобы динамически найти и загрузить класс, который проанализирует URI, осуществит подключение и вернет соответствующий объект Connection.
+
+Важно понимать, что CLDC просто определяет входящие в GCF интерфейсы и классы и не требует, чтобы поддерживался какой-нибудь специфический протокол. Профели, построенные над CLDC определяют, какие из протоколов должны поддерживаться. Например, профиль MIDP требует поддержки HTTP протокола. Реализация может дополнительно поддерживать и другие протоколы. Например CLDC от фирмы Sun, поддерживает такие специфические протоколы, как "datagram", "socket" и "file". Если Вы хотите создать приложение, которое будет свободно работать на различных устройствах, ограничьтесь протоколами, поддерживаемыми профилем. 
+
+Шесть типов соединений, поддерживаемых GCF опредены шестью расширениями интерфейса Connection. Сам по себе этот интерфейс очень прост: он определяет единственный метод close().
+
+Интерфейс InputConnection предназначен для работы с потоками. Например он позволяет организовать чтение из сокета или файла. Интерфейс определяет два метода: InputStream() и DataInputStream(). Пример их использования приведен ниже:
+
+---
+import java.io.*;
+import javax.microedition.io.*;
+
+public class TestInput {
+
+    public static void main( String args[] ) {
+        try {
+            String uri = "file:c:/autoexec.bat";
+            InputConnection conn = (InputConnection)
+                     Connector.open( uri,
+                        Connector.READ );
+            InputStream in = conn.openInputStream();
+            int ch;
+
+            conn.close(); // Входящий поток не закрыт!
+
+            System.out.println( "Contents of [" + uri +
+                                                 "]" );
+
+            while( ( ch = in.read() ) != -1 ){
+                System.out.print( (char) ch );
+            }
+
+            in.close();
+        }
+        catch( ConnectionNotFoundException e ){
+            System.out.println( "File could not be
+                                         found!" );
+        }
+        catch( IOException e ){
+        System.out.println( e.toString() );
+        }
+
+        System.exit( 0 );
+    }
+}
+---
+
+
+Этот пример нужно запускать на компьютере, поскольку там точно поддерживается протокол "file". (Как упомянуто выше, этот протокол относится к специфическим и может не поддерживаться другими устройствами.) Обратите внимание и на то, что URI имеет вид: "file:диск:путь". Этот URI будет корректно работать в программе для WINDOWs. Если Вы собираетесь работать в Unix/Linux, используйте форму "file:путь".
+
+Программа может правильно завершить соединение только после получения входящего потока. Фактически вы должны закрыть все входящие потоки,
+ перед закрытием всего соединения. 
+
+Еще одно замечание. Если вы собираетесь использовать программу как MIDlet (то есть вы пишете MIDP приложение), то вы не можете использовать System.exit для завершения программы. Вместо этого воспользуйтесь методом MIDlet.notify.Destroyed.
+
+
+Для записи в поток можете использовать метод OutputConnection:
+
+---
+import java.io.*;
+import javax.microedition.io.*;
+
+public class TestOutput {
+
+    public static void main( String[] args ){
+        try {
+            String uri = "file:c:/hah.txt;append=true";
+            OutputConnection conn = (OutputConnection)
+                     Connector.open( uri, Connector.WRITE );
+            OutputStream out = conn.openOutputStream();
+            PrintStream print = new PrintStream( out );
+
+            conn.close(); // Не закрывайте исходящий поток!
+
+            print.println( "Hah hah hah!" );
+
+            out.close();
+        }
+        catch( ConnectionNotFoundException e ){
+            System.out.println( "File could not be
+                                      created!" );
+        }
+        catch( IOException e ){
+            System.out.println( e.toString() );
+        }
+
+        System.exit( 0 );
+    }
+}
+---
+
+И снова, этот пример необходимо выполнять на компьютере. Если Вы хотите создать новый файл, просто удалите ";append=true" из URI.
+
+Если протокол поддерживает оба вида потока (и входящий и исходящий), как например socket, то можно воспользоваться интерфейсом StreamConnection, котопый является расширением InputConnection и OutputConnection. Пример его использования приведен ниже:
+
+---
+import java.io.*;
+import javax.microedition.io.*;
+
+public class TestInputOutput {
+
+    public static void main( String[] args ){
+        try {
+            String uri =
+            "socket://www.ericgiguere.com:80";
+            StreamConnection conn = (StreamConnection)
+                     Connector.open( uri );
+
+            // Послать HTTP запрос...
+
+            PrintStream out = new PrintStream(
+                                conn.openOutputStream() );
+            out.println( "GET /index.html HTTP/0.9\r\n" );
+            out.flush();
+
+            // Получить  HTTP ответ...
+
+            InputStream in = conn.openInputStream();
+            int ch;
+
+
+            while( ( ch = in.read() ) != -1 ){
+                System.out.print( (char) ch );
+            }
+
+            in.close();
+            out.close();
+            conn.close();
+        }
+        catch( ConnectionNotFoundException e ){
+            System.out.println( "Socket could not be
+                                          opened" );
+        }
+        catch( IOException e ){
+            System.out.println( e.toString() );
+        }
+
+        System.exit( 0 );
+    }
+}
+---
+
+В примере TestInputOutput устанавливается соединение с HTTP сервером и ему посылается GET запрос. Затем приложение ожидает отвера. Можно реализовать все это и более простым способом, используя интерфейс ContentConnection и протокол "testhttp". Этот протокол представляет собой облегченную версию HTTP . Пример его использования приведен ниже:
+
+---
+import java.io.*;
+import javax.microedition.io.*;
+
+public class TestHTTP {
+
+    public static void main( String[] args ){
+        try {
+            String uri =
+              "testhttp://www.ericgiguere.com/index.html";
+            ContentConnection conn = (ContentConnection)
+               Connector.open( uri );
+
+            InputStream in = conn.openInputStream();
+            int ch;
+
+            System.out.println( "Content type is "
+                               + conn.getType() );
+
+            while( ( ch = in.read() ) != -1 ){
+                System.out.print( (char) ch );
+            }
+
+            in.close();
+            conn.close();
+        }
+        catch( ConnectionNotFoundException e ){
+            System.out.println(
+                   "URI could not be opened" );
+        }
+        catch( IOException e ){
+            System.out.println( e.toString() );
+        }
+
+        System.exit( 0 );
+    }
+}
+---
+
+Интерфейс ContentConnection расширяет StreamConnection и добавляет три новых метода, реалезующих основные функции HTTP протокола: getType, getEncoding и getLength. Сам по себе ContentConnection не особо полезен. В MIDP он используется для определения интерфейса HttpConnection, который включает полную поддержку HTTP протокола. Его использование описано в статье "Реализация HTTP соединений в MIDP".
+
+Два еще не рассмотренных интерфейса очень специфические. Интерфейс StreamConnectionNotifier необходим для написание серверных приложений и включает один метод acceptAndOpen. Этот метод вызывается для ожидания подключения клиента. Метод возвращает объект StreamConnection, который затем можно использовать для соединения по "serversocket" протоколу.
+
+Последний интерфейс называется DatagramConnection. Он используется для отправки и получения датаграмм. DatagramConnection содержится в пакете java.net.DatagramSocket J2SE платформы

@@ -1,0 +1,298 @@
+28 декабря 2005 г. - Шифрование данных в J2ME
+
+
+
+Если ваше J2ME приложение сохраняет или передает конфиденциальные данные, Вы просто обязаны позаботиться о безопасности. Профиль MIDP 1.0 не поддерживает соединение по защищенному протоколу HTTPS, поэтому сохранность данных полностью зависит от надежности сети. Шифрование может на порядок повысить надежность Вашей программы. Оно пригодится даже если данные никуда не передаются. Например, в случае запуска программы на Palm OS устройстве, информация, сохраняемая в MIDP, фактически хранятся в открытом виде в базе записей Palm OS. MIDP заботится о том, чтобы к данным могло получить доступ только приложение сохранившее их. Однако, непосредственное копирование информации независимо от MIDP средствами Palm OS достаточно простая задача. Шифрование защитит данные от большинства видов атак. 
+
+К сожалению, шифрование не является стандартной функцией CDC или CLDC. Вы можете написать собственный код шифрования/расшифровки, или использовать библиотеки сторонних производителей. Написание хорошего алгоритма шифрования достаточно сложная задача. Гораздо проще воспользоваться готовым кодом. 
+
+Legion of the Bouncy Castle это открытый Java проект, целью которого является создание надежных библиотек шифрования. Хотя большая часть наработок ориентирована на J2SE, проект содержит и алгоритмы, приспособленные для работы с J2ME. Большая часть lightweight API работает с CLDC и с CLD. Lightweight API поддерживает известные алгоритмы блочного и потокового шифрования, такие как DES, Blowfish, IDEA, Rijndael и RC4; а также генерацию и обмен ключами. К сожалению еще, не все эти возможности реализованы для платформы J2ME. 
+
+Чтобы воспользоваться API, посетите сайт Bouncy Castle и скачайте последний релиз lightweight API for J2ME. Распакуйте полученный архив в какую-нибудь папку. Не смотря на то, что архив midp_classes.zip содержит уже скомпилированные классы, гораздо лучше переписать исходники библиотеки в ваш проект, поскольку некоторые из Bouncy Castle классов ссылаются на классы, не входящие в состав CLDC или MIDP. Кроме того, Вы будете более четко представлять каких затрат памяти стоит использование шифрования. 
+
+Ниже приведен пример простого класса, использующего Bouncy Castle lightweight API. 
+
+import org.bouncycastle.crypto.*;
+import org.bouncycastle.crypto.engines.*;
+import org.bouncycastle.crypto.modes.*;
+import org.bouncycastle.crypto.params.*;
+
+// Пример показывает использование Bouncy Castle
+// lightweight API, для шифрования данных с
+// помощью алгоритма DES
+
+public class Encryptor {
+
+    private BufferedBlockCipher cipher;
+    private KeyParameter key;
+    
+    // Инициируем движок.
+    // Длина ключа не может быть меньше 8 байт.
+
+    public Encryptor( byte[] key ){
+        cipher = new PaddedBlockCipher(
+                    new CBCBlockCipher(
+                       new DESEngine() ) );
+
+        this.key = new KeyParameter( key );
+    }
+
+    // Инициируем движок.
+    // Длина ключа не может быть меньше 8 aaeo.
+
+    public Encryptor( String key ){
+        this( key.getBytes() );
+    }
+
+    // Процедура, выполняющая черновую работу.
+
+    private byte[] callCipher( byte[] data )
+                        throws CryptoException {
+        int size = 
+                   cipher.getOutputSize( data.length );
+        byte[] result = new byte[ size ];
+        int olen = cipher.processBytes( data, 0,
+                              data.length, result, 0 );
+        olen += cipher.doFinal( result, olen );
+
+        if( olen < size ){
+            byte[] tmp = new byte[ olen ];
+            System.arraycopy( 
+                             result, 0, tmp, 0, olen );
+            result = tmp;
+        }
+
+        return result;
+    }
+    // Шифруем произвольную последовательность данных.
+    // Результат сохраняется в новый массив.
+
+    public synchronized byte[] encrypt( byte[] data )
+                  throws CryptoException {
+        if( data == null || data.length == 0 ){
+            return new byte[0];
+        }
+
+        cipher.init( true, key );
+        return callCipher( data );
+    }
+
+    // Шифрование строки
+
+    public byte[] encryptString( String data )
+                  throws CryptoException {
+        if( data == null || data.length() == 0 ){
+            return new byte[0];
+        }
+
+        return encrypt( data.getBytes() );
+    }
+
+    // Расшифровка
+
+    public synchronized byte[] decrypt( byte[] data )
+                  throws CryptoException {
+        if( data == null || data.length == 0 ){
+            return new byte[0];
+        }
+
+        cipher.init( false, key );
+        return callCipher( data );
+    } 
+    // Расшифровка строки, зашифрованной
+    //с помощью encryptString.
+
+    public String decryptString( byte[] data )
+                    throws CryptoException {
+        if( data == null || data.length == 0 ){
+            return "";
+        }
+
+        return new String( decrypt( data ) );
+    }
+}
+
+Конструктор определяет алгоритм, с помощью которого производится шифрование данных. В случае DESEngine - это 56-битный DES алгоритм: 
+
+public Encryptor( byte[] key ){
+        cipher = new PaddedBlockCipher(
+                    new CBCBlockCipher(
+                       new DESEngine() ) );
+
+Алгоритм DES работает с 8-байтными блоками. Чтобы зашифровать данные произвольного размера, конструктор использует PaddedBlockCipher и CDCBlockCipher. Это приводит к созданию объекта "шифра", который инициализируется перед использованием. В процессе инициализации задается направление шифрования и используемый ключ. 
+
+Шифрование и расшифровка данных фактически происходит в подпрограмме callCipher. 
+
+private byte[] callCipher( byte[] data )
+                throws CryptoException {
+    int size = 
+        cipher.getOutputSize( data.length );
+
+Чтобы расшифровать данные, необходимо создать экземпляр этого класса и передать ему секретный ключ. Длина ключа не может быть меньше восьми байт (или символов). 
+
+Encryptor encryptor = new Encryptor( "ghk23rTX" );
+
+Обратите внимание, поскольку в нашем примере используется алгоритм DES 56-bit, то только первые восемь байт ключа используются для шифрования. 
+
+Для шифрования произвольных бинарных данных используйте методы encrypt и decrypt. Методы encryptString и decryptString удобно использовать для шифрования строк. 
+
+Ниже приведен пример простого MIDlet-а, использующего класс Encryptor для шифрования и расшифровки строк, записанных в хранилище. Приложение запрашивает у пользователя восьмисимвольный ключ. Пользователь может ввести произвольный ключ и посмотреть, что получится. Только правильный ключ позволяет расшифровать строки. 
+
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+import javax.microedition.rms.*;
+
+import org.bouncycastle.crypto.*;
+
+// Простой пример шифрования/расшифровки данных.
+
+public class CryptoTest extends MIDlet {
+
+    private Display display;
+    private Command exitCommand =
+                         new Command( "Exit",
+                                     Command.EXIT, 1 ); 
+    private Command okCommand =
+                         new Command( "OK",
+                                      Command.OK, 1 );
+
+    private Encryptor encryptor;
+    private RecordStore rs;
+
+    public CryptoTest(){
+    }
+
+    protected void destroyApp( boolean unconditional )
+                   throws MIDletStateChangeException {
+        exitMIDlet();
+    }
+
+    protected void pauseApp(){
+    }
+
+    protected void startApp()
+                   throws MIDletStateChangeException {
+        if( display == null ){ // Первый вызов...
+            initMIDlet();
+        }
+    }
+
+    private void initMIDlet(){
+        display = Display.getDisplay( this );
+
+        // Открываем хранилище данных
+
+        try {
+            rs = RecordStore.openRecordStore( "test",
+                                    true );
+        }
+        catch( RecordStoreException e ){
+            // Обработчик ошибок
+        }
+
+        display.setCurrent( new AskForKey() );
+    }
+
+    public void exitMIDlet(){
+        try {
+            if( rs != null ){
+                rs.closeRecordStore();
+            }
+        }
+        catch( RecordStoreException e ){
+        }
+
+        notifyDestroyed();
+    }
+
+    private void displayException( Exception e ){
+        Alert a = new Alert( "Exception" );
+        a.setString( e.toString() );
+        a.setTimeout( Alert.FOREVER );
+        display.setCurrent( a, new AskForKey() );
+    }
+
+    class AskForKey extends TextBox
+                    implements CommandListener {
+        public AskForKey(){
+            super( "Enter a secret key:", "", 8, 0 );
+            setCommandListener( this );
+            addCommand( okCommand );
+            addCommand( exitCommand );
+        }
+
+        public void commandAction( Command c,
+                                   Displayable d ){
+            if( c == exitCommand ){
+                exitMIDlet();
+            } 
+
+            String key = getString();
+            if( key.length() < 8 ){
+                    // Введен слишком короткий ключ
+                Alert a = new Alert( "Key too short" );
+                a.setString( "The key must be " +
+                             "8 characters long" );
+                setString( "" );
+                display.setCurrent( a, this );
+                return;
+            }
+
+            encryptor = new Encryptor( key );
+
+            try {
+                if( rs.getNextRecordID() == 1 ){
+                    display.setCurrent(
+                                  new EnterMessage() );
+                } else {
+                    byte[] data = rs.getRecord( 1 );
+                    String str = 
+                       encryptor.decryptString( data );
+
+                    Alert a = 
+                        new Alert( "Decryption" );
+                    a.setTimeout( Alert.FOREVER );
+                    a.setString( 
+                        "The decrypted string is '" +
+                                 str + "'" );
+                    display.setCurrent( a, this );
+                }
+            }
+            catch( RecordStoreException e ){
+                displayException( e );
+            }
+            catch( CryptoException e ){
+                displayException( e );
+            }
+        }
+    }
+
+    class EnterMessage extends TextBox
+                       implements CommandListener {
+        public EnterMessage(){
+            super( "Enter a message to encrypt:", "",
+                   100, 0 );
+            setCommandListener( this );
+            addCommand( okCommand );
+        }
+
+        public void commandAction( Command c,
+                                   Displayable d ){
+            String msg = getString();
+
+            try {
+                byte[] data =
+                      encryptor.encryptString( msg );
+                rs.addRecord( data, 0, data.length );
+            }
+            catch( RecordStoreException e ){
+                displayException( e );
+            }
+            catch( CryptoException e ){
+                displayException( e );
+            }
+
+            display.setCurrent( new AskForKey() );
+        }
+    }
+}

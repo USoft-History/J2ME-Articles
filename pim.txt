@@ -1,0 +1,175 @@
+21 февраля 2006 г. - JSR 75. Часть 1 - Personal Information Management (PIM) API. Работа с личными данными 
+
+
+
+В состав JSR 75 входят два дополнительных пакета: 
+The FileConnection (FC) API - Дает разработчику возможность получить доступ к файловой системе телефона и данным на сменных носителях типа карт памяти. 
+The Personal Information Management (PIM) API - Позволяет работать с персональными данными, сохраненными в телефоне. 
+
+Для работы JSR 75 телефон должен поддерживать CLDC 1.0 или выше. Оба пакета (FC и PIM) являются дополнительными и независимыми друг от друга. Поддержка дополнительных пакетов оставляется на усмотрение производителя устройства. Конечный пользователь и J2ME разработчик не могут установить дополнительные пакеты в телефон. JSR 75 поддерживают следующие модели телефонов: Nokia 6230i, 6235, 6235i, 6255, 7270 ,3152, 3155, 3155i, 5140i, 6030, 6101,6102,6111, 6152, 6155, 6155i, 6265, 6265i, 6270, 6630, 6280, 6680, 6681, 6682, 6822, 8800, 8801, 9300, 9500, N70, N90; и Sony Ericsson W800i, W800c, K750i, K750c, K600i, K600c, D750i ,Z520i, Z520a, Z520c, W600, K608i, V600ids. Конечно это не полный список. 
+Personal Information Management (PIM) API
+
+С помощью PIM программа может получить доступ к персональной информации, хранящейся в памяти устройства, на съемной карте памяти или где-нибудь в сети. PIM позволяет импортировать и экспортировать данные в адресную книгу, календарь и планировщик в форматах vCard и vCalendar. Этот интерфейс не накладывает ни каких ограничений на используемые поля и атрибуты. 
+
+В PIM определены три типа PIM данных, называемых также PIM списками: 
+Список контактов (Contact), содержащий имена, номера телефонов и прочую персональную информацию. 
+Список событий (Event), содержащий напоминания и другие привязанные к определенной дате элементы. 
+Список дел (ToDo), содержащий задачи, которые пользователь должен выполнить. 
+Устройство может не поддерживать все три типа данных. Производитель телефона вполне может ограничиться одним или двумя списками. 
+PIM API
+
+PIM API определен в пакете javax.microedition.pim (либо в javax.microedition.io.pim). Этот пакет содержит восемь интерфейсов, шесть классов, включая четыре типа исключительных ситуаций: 
+Интерфейсы PIM APIИнтерфейс	Описание
+PIMItem	Самый общий интерфейс для элементов PIM списка.
+PIMList	Общий интерфейс для ContactList, EventList, и ToDoList, каждый из которых может содержать ноль или более PIMItem элементов.
+Contact	Отдельная запись в базе контактов; поля этого интерфейса являются подмножеством полей vCard спецификации.
+ContactList	Список Contact элементов.
+Event	Отдельная запись в базе событий.
+EventList	Список Event элементов.
+ToDo	Отдельная запись в базе дел.
+ToDoList	Список ToDo элементов.
+
+
+Классы PIM APIКласс	Описание
+PIM	Набор методов для получения информации о PIMList и установки доступа.
+RepeatRule	Описание структуры Event элемента, для описания времени наступления соответствующего события; статические поля этого класса представляют собой подмножество поля RRULE в VEVENT, определенного в спецификации vCalendar 1.0.
+FieldEmptyException	Эта исключительная ситуация возникает при попытке обратиться к полю, которое не имеет связанных с ним данных.
+FieldFullException	Эта исключительная ситуация возникает при попытке записать данные в непустое поле
+PIMException	Эта исключительная ситуация инициируется PIM классами 
+UnsupportedException	Эта исключительная ситуация возникает когда поле не поддерживается PIM списком к которому относится элемент.
+
+
+Чтобы убедиться в том, что устройство поддерживает PIM API, необходимо воспользоваться методом System.getproperty() с параметром microedition.pim.version. Метод должен возвратить номер версии API или null, есть PIM не поддерживается данным устройством. 
+
+String v = System.getProperty( "microedition.pim.version" );
+if( v != null )
+    {
+    // PIM поддерживается
+    } else {
+    // PIM не поддерживается
+    }
+Использование PIM API
+
+Доступ к данным осуществляется через экземпляр класса PIM: 
+
+import javax.microedition.pim.*;
+
+PIM singleton = PIM.getInstance(); 
+
+Все PIM списки представлены PIMList интерфейсом, имеющим три подинтерфейса: ContactList, EventList и ToDoList. 
+
+Для того чтобы получить доступ к PIM списку необходимо использовать метод openPIMList(int par1, int par2, String par3). Первый параметр этого метода определяет тип списка: 
+PIM.CONTACT_LIST - для списка контактов 
+PIM.EVENT_LIST - для списка событий 
+PIM.TODO_LIST - для списка дел 
+Второй параметр определяет режим работы: 
+PIM.READ_ONLY - только чтение 
+PIM.READ_WRITE - чтение и запись 
+PIM.WRITE_ONLY - только запись 
+Третий параметр является дополнительным и содержит имя PIM списка, который Вы хотели бы получить. Если Вы опустите этот параметр, openPIMList() вернет заданный по умолчанию список. При попытке открыть несуществующий список, возникает исключительная ситуация PIMException. 
+
+...
+PIM pim = PIM.getInstance();
+ToDoList list = null;
+
+try {
+   list = (ToDoList) pim.openPIMList(PIM.TODO_LIST, PIM.READ_ONLY, "list-name");
+   // используем список
+} catch (PIMException pe) {
+  // такого списка не сузествует
+} catch (SecurityException se) {
+  // MIDlet не может получить доступ к требуемому списку
+}
+
+Как правило, в сотовом телефоне контакты могут храниться на SIM карте и в памяти самого телефона. Таким образом, имеются несколько различных PIM списков одного типа. Следует сказать, что не существует общепринятых имен для обозначения списков. Чтобы получить все доступные PIM списки, необходимо воспользоваться методом listPIMLists(). 
+
+PIM список содержит элементы, представленные интерфейсом PIMItem и его подинтерфейсами Contact, Event и ToDo. Чтобы получить набор элементов PIM списка, нужно воспользоваться методом items(). Для перемещения по элементам используйте метод nextElement(): 
+
+...
+Enumeration enum = list.items();
+while(enum.hasMoreElements()) {
+    ToDo task = (ToDo) enum.nextElement();
+    // Делаем что-нибудь с задачей
+}
+...
+
+Следующий пример показывает, как открыть список контактов и найти/добавить контакт. 
+
+...
+// Открываем заданный по умолчанию список контактов.
+PIM pim = PIM.getInstance();
+ContactList clist;
+try {
+   clist = (ContactList) pim.openPIMList(PIM.CONTACT_LIST, PIM.READ_WRITE);
+} catch(Exception e) {
+   // security or other exception
+}
+
+// Поиск контактов.
+// Метод countValues() возвращает число значений, 
+// содержащихся в текущем поле.
+Enumeration contacts = clist.items();
+Contact c = (Contact) contacts.nextElement();
+int phoneNumbers = c.countValues(Contact.TEL);
+for(int i = 0; i < phoneNumbers; i++) {
+   if((c.getAttributes(Contact.TEL) != 0) & Contact.ATTR_HOME != 0) {
+      // домашний номер
+      String home = c.getString(Contact.TEL, i);
+   }
+}
+
+//Добавляем значение в контакт
+Contact c = clist.createContact();
+int attrs = Contact.ATTR_HOME;
+c.addString(Contact.TEL, attrs, "416-799-1313");
+// Некоторые поля могут быть добавлены без атрибутов
+c.addString(Contact.ORG, PIMItem.ATTR_NONE, "someName Corporation");
+// Заносим элемент в базу данных телефона
+c.commit();
+...
+
+Обратите внимание на использование метода countValues(), возвращающего число значений в поле. Для чтения значений элементов используются методы getAttributes(int field), getString(int field, int index), getDate(int field, int index) и getInt(int field, int index), где field - определяют требуемое поле, а index - требуемую запись. 
+
+Для создания нового PIMItems элемента используются методы createContact(), createEvent(), createToDo(). Для заполнения полей - методы addDate(int field, int attributes, long value), addInt(int field, int attributes, int value), addString(int field, int attributes, java.lang.String value). 
+
+Следует отметить, что устройство может поддерживать не все поля. В определенных ситуациях это приводит к потере данных. Чтобы убедиться, что требуемые поля поддерживаются, воспользуйтесь методом isSupportedField(). 
+Использование эмулятора J2ME Wireless Toolkit 2.2 для тестирования PIM списков
+
+J2ME Wireless Toolkit 2.2 содержит стандартный пример PDAPDemo иллюстрирующий работу с PIM списками. 
+
+По умолчанию в эмуляторе не заданы контакты и календари. Физически PIM списки располагаются в папках toolkit/appdb/DefaultColorPhone/pim/contacts/Contacts, toolkit/appdb/DefaultColorPhone/pim/events/Events и toolkit/appdb/DefaultColorPhone/pim/todo/ToDo. Контакты сохраняются в формате vCard, а календари и дела - в vCalendar. 
+
+Приведу пример файла в формате vCard. Чтобы использовать эти данные на эмуляторе, сохраните этот файл как toolkit/appdb/DefaultColorPhone/pim/contacts/Contacts/sample.vcf 
+
+BEGIN:VCARD
+VERSION:2.1
+N:Mahmoud;Qusay;H.
+FN:Qusay H. Mahmoud
+ORG:JavaCourses
+TITLE:Developer
+NOTE:Helping You With Java!
+TEL;WORK;VOICE:(416) 999-1111 ext 1000
+TEL;WORK;FAX:(416) 333-9999
+ADR;WORK;ENCODING=QUOTED-PRINTABLE:;;1500 Java Ave.=0D=0ASuite 101;Toronto;ON;M9V1L1;Canada
+LABEL;WORK;ENCODING=QUOTED-PRINTABLE:1500 Java Ave.=0D=0ASuite 101=0D=0AToronto, ON M9V1L1=0D=0ACanada
+URL;WORK:http://www.javacourses.com
+EMAIL;PREF;INTERNET:qmahmoud@javacourses.com
+REV:20043335T124220Z
+END:VCARD
+
+Приведу также пример файла в формате vCalendar. Чтобы использовать эти данные на эмуляторе, сохраните этот файл как toolkit/appdb/DefaultColorPhone/pim/events/Eevnts/sample.vcs 
+
+BEGIN:VCALENDAR
+VERSION:1.0
+BEGIN:VEVENT
+DTSTART:19980114T210000Z
+DTEND:19980114T230000Z
+LOCATION:My office
+CATEGORIES:Business
+DESCRIPTION;ENCODING=QUOTED-PRINTABLE:This is a note associated with the meeting=0D=0A
+SUMMARY:Meeting to discuss new architecture
+PRIORITY:3
+END:VEVENT
+END:VCALENDAR
+
+

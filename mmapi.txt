@@ -1,0 +1,429 @@
+18 марта 2006 г. - Работа со звуком и видео в J2ME MIDP 2.0. Библиотека Mobile Media API (MMAPI)
+
+
+
+Mobile Media API (MMAPI) - дополнительный пакет, который поддерживается мультимедийными устройствами. Стандартная Java спецификация, заданная в JSR 135, отличается своей гибкостью. Она рассчитана на работу с произвольными протоколами и форматами. 
+
+В статье рассматривается техническая реализация архитектуры MMAPI и ее практическое использование. 
+Обзор MMAPI
+
+В профиле MIDP 1.0 отсутствовала возможность работы со звуком, поэтому приходилось полагаться на нестандартные классы, предлагаемые производителями мобильных телефонов. С появлением MIDP 2.0 эта проблема исчезла, поскольку в его состав входит мультимедиа библиотека MMAPI. 
+
+MMAPI имеет следующие особенности: 
+Поддерживает генерацию тонов, воспроизведение и запись Time-Based медиа информации. Пакет поддерживает любой time-based аудио или видео контент. 
+Скромные системные требования. MMAPI рассчитан на рабату в жестких условиях мобильных устройств. 
+Безразличие к протоколам и форматам. MMAPI не заточен под конкретный протокол и формат. 
+Разработчики могут ориентироваться на ограниченную часть типов контента. 
+Расширяемость. Новые возможности могут быть добавлены без необходимости переделывать старые функции. Легко добавляются новые форматы и механизмы управления средой. 
+Механизм обработки мультимедмйной информации
+Обработка мультимедмйной информации делится на две части: 
+Обработка протокола: чтение данных из различных источников, например из файлов или сервера потока данных в систему обработки мультимедийной информации. 
+Обработка формата: разбор или декодирование полученных данных; предоставление их в понятном формате устройствам вывода (спикеру или дисплею). 
+
+Для облегчения этих операций API предоставляет два типа объектов высокого уровня: 
+DataSource реализует обработку протокола, скрывая подробности чтения данных из источника. Сервисные методы этого объекта дают возможность объекту Player обрабатывать контент. 
+Player получает данные от DataSource, обрабатывает их, переводит в формат, понятный устройствам вывода. Этот объект содержит методы управления воспроизведением.
+
+MMAPI определяет еще один объект Manager. С его помощью ваше приложение может создавать объект Player на основании DataSources, и DataSources на основании InputStreams. 
+
+Для создания объекта Player необходимо вызвать метод Manager.createPlayer(String url). Параметр URL определяет протокол и формат. Он имеет вид: протокол:источник. 
+
+Приложение может использовать методы объекта Player для управления воспроизведением time-based медиа информацией. 
+
+Player может находиться в пяти состояниях: UNREALIZED, REALIZED, PREFETCHED, STARTED и CLOSED. После создания, Player находится в состоянии UNREALIZED. Вызов метода realize() переводит его в состояние REALIZED и инициализирует информацию необходимую player-у для получения медиа ресурсов. Метод prefetch() переводит его в состояние PREFETCHED. На этом этапе формируется соединение с потоком данных и производится закачка всех необходимых файлов. Вызов start() переводит плеер в режим STARTED, с этого момента начинается воспроизведение. Когда обработка данных завершается (достигнут конец потока данных), Player переходит в режим PREFETCHED. Вызов метода close() переводит Player в состояние CLOSED. 
+
+Помимо указанных выше методов, Player имеет еще несколько: 
+getState() - возвращает текущее состояние проигрывателя. 
+setLoopCount( int ) - устанавливает число повторов при воспроизведении звука. 
+getDuration() - возвращает длительность звука в миллисекундах. 
+getMediaTime() - возвращает текущее время воспроизведения в миллисекундах. 
+setMediaTime( int) - устанавливает текущее время воспроизведения в миллисекундах. 
+getCountType() - возвращает тип воспроизводимых звуковых данных. 
+dellocate() - освобождает ресурс, занятый проигрывателем. 
+
+Player позволяет осуществлять управление обрабатываемыми данными. Для этого используются методы getControl() (для определения типа управления) и getControls() (для получения управления). Например, при обработке MIDI информации вызов getControl() вернет MIDIControl. 
+MMAPI пакеты
+В состав MMAPI входят три пакета: 
+javax.microedition.media - здесь определено несколько интерфейсов и исключение, а также класс Manager. 
+javax.microedition.media.control - определяет типы управления, которые может использовать Player, например VolumeControl или VideoControl. 
+javax.microedition.media.protocol - определяет протоколы и класс DataSource. 
+
+В приведенных ниже таблицах описаны классы, интерфейсы и исключительные ситуации, входящие в состав MMAPI. Будем использовать следующие сокращения:
+
+(M) - javax.microedition.media
+(C) - javax.microedition.media.control
+(P) - javax.microedition.media.protocol
+
+Таблица 1 - КлассыПакет	Класс	Описание
+(M)	Manager	Позволяет получить системно-зависимые ресурсы, такие как Playr для обработки мультимедийных данных. 
+(P)	ContentDescriptor	Описывает источники мультимедийной информации
+(P)	DataSource	Представляет собой абстрактный класс, обеспечивающий обработку протокола. Этот класс скрывает от программиста подробности работы с источником данных. Этот объект обеспечивает данными интерфейс Player. 
+
+
+Таблица 2 - ИнтерфейсыПакет	Интерфейс	Описание
+(M)	Control	Используется для управления некоторыми функциями обработки мультимедийных данных. Является потомком интерфейса Controllable. 
+(M)	Controllable	Предоставляет интерфейс для получения Control на основании Player или другого объекта.
+(M)	Player	Используется для управления и обработки мультимедийных данных. Предоставляет методы, позволяющие управлять состоянием объекта Player.
+(M)	PlayerListener	Получает события, сгенерированные Player-ом
+(M)	TimeBase	Таймер, позволяющий синхронизировать работу нескольких player-ов.
+(C)	FramePositionControl	Управляет точным позиционированием кадра видео данных для объекта Player.
+(C)	GUIControl	Должен поддерживаться любым компонентом, работающим с GUI.
+(C)	MetaDataControl	Используемый, чтобы восстановить информацию о метаданных, включенную в поток данных.
+(C)	MIDIControl	Обеспечивает доступ к обработке MIDI данных.
+(C)	PitchControl	Управляет шагом воспроизведения звукового вывода, не изменяя скорость воспроизведения.
+(C)	RateControl	Управляет скоростью воспроизведения
+(C)	RecordControl	Управляет рекодированием медиа данных
+(C)	StopTimeControl	Используемый, чтобы определить предварительно установленное время остановки плеера
+(C)	TempoControl	Управляет темпом песни (для MIDI)
+(C)	ToneControl	Допускает воспроизведению определяемой пользователем последовательности нот
+(C)	VideoControl	Управляет видео дисплеем, например его положением на экране
+(C)	VolumeControl	Управляет громкостью
+(P)	SourceStream	Используется вместе с DataSource, чтобы обеспечить входной интерфейс для Player. Является расширением Controllable.
+
+
+Таблица 3 - Исключительные ситуацииПакет	Исключение	Описание
+(M)	MediaException	Сообщает о возникновении неизвестной ошибки в процессе обработки медиа данных.
+
+
+Поддержка того или иного протокола и формата зависит от конкретного телефона. Чтобы получить список всех доступных протоколов и форматов необходимо воспользоваться методами Manager.getSupportedContentTypes() и Manager.getSupportedProtocols(). 
+Использование MMAPI
+
+Ниже будет приведен код, показывающий использование MMAPI. Мы будем рассматривать стандартный пример, входящий в WTK: /wtk20/apps/mmademo. 
+Последовательности нот
+
+Метод Manager.playTone() используется для генерации тонального звука. Вы должны передать ему требуемую ноту, ее длительность и громкость: 
+
+...
+try {
+   // Играть ноту C4 ("До") 4000 миллисекунд с громкостью 100 единиц (диапазон громкости от 0 до 100).
+   Manager.playTone()(ToneControl.C4, 4000, 100);
+} 
+catch(MediaException me) {
+}
+...
+
+ 
+
+Кроме того, Вы можете создать плеер для синхронизации с последовательностью нот.
+
+...
+Player player =
+  Manager.createPlayer(Manager.TONE_DEVICE_LOCATOR);
+player.realize();
+ToneControl tc1=(ToneControl)player.getContril("ToneControl");
+//Подключаем последовательность нот, указанных в массиве Nots
+tc1.setSequence(Nots);
+player.start();
+...
+
+
+Последовательность нот должна быть задана в следующем виде: 
+
+byte[] Nots={
+ToneControl.VERSION, 1, //версия используемого атрибута
+ToneControl.TEMPO, speed, //темп мелодии. Переменная speed = 5-127
+ToneControl.BLOCK_START, 0, //начало блока 0
+ToneControl.С4, 4          //Нота До продолжительностью 4 (можно от 2 до 16)
+ToneControl.SILENCE, 4 //Пауза продолжительностью 4
+ToneControl.С4+1, 4          //Нота До# продолжительностью 4
+ToneControl.SILENCE, 4 //Пауза продолжительностью 4
+ToneControl.С4+2, 4          //Нота Ре продолжительностью 4
+ToneControl.SILENCE, 4 //Пауза продолжительностью 4
+...
+...
+ToneControl.С4+12, 4     //Нота До следующей октавы
+ToneControl.BLOCK_END, 0, //конец блока 0
+ToneControl.PLAY_BLOCK, 0} //воспроизведение блока 0
+
+Этот тип плеера создает ToneControl, который можно использовать для программирования последовательности нот. Эта возможность доступна только на мощных устройствах. 
+Проигрывание мультимедийных файлов
+
+Приведенный ниже пример показывает, как воспроизвести простой mp3 файл без использования контроля.
+
+...
+try {
+   Player p = Manager.createPlayer
+     ("http://server/somemusic.mp3");
+   p.setLoopCount(5);
+   p.start();
+} 
+catch(IOException ioe) {
+} 
+catch(MediaException e) {
+}
+...
+
+Аналогичным способом можно воспроизводить wav и midi файлы.
+
+В приведенном ниже коде добавлена возможность управления:
+
+...
+Player p;
+VolumeControl vc;
+try {
+   p = Manager.createPlayer("http://server/somemusic.mp3");
+   p.realize();
+   // получаем доступ к управлению громкостью и устанавливаем ее на полную мощность.
+   vc = (VolumeControl) p.getControl("VolumeControl");
+   if(vc != null) {
+      vc.setVolume(100);
+   }
+   // плеер запускается с минимальным временем ожидания
+   p.prefetch();
+   // неблокируемый запуск
+   p.start();
+} 
+catch(IOException ioe) {
+} 
+catch(MediaException e) {
+}
+...
+
+Поскольку Manager.createPlayer() можно передавать любой InputStream, ваше приложение может проигрывать информацию, сохраненную в MIDP Record Management System (RMS), или находящуюся внутри JAR архива. В приведенном ниже примере показано, как получить InputStream из RMS и воспроизвести эту информацию. 
+
+...
+RecordStore store;
+int id;
+// воспроизведение из RMS
+try {
+   InputStream is = new ByteArrayInputStream(store.getRecord(id));
+   Player player = Manager.createPlayer(is, "audio/X-wav");
+   p.start();
+} 
+catch (IOException ioe) {
+} 
+catch (MediaException me) {
+}
+...
+
+Обратите внимание на строчку Player player = Manager.createPlayer(is, "audio/X-wav"). Если Вы хотите проигрывать midi файл, необходимо указать другой MIME тип: "audio/midi". 
+
+Ниже приведен пример, проигрывающий wav файл, входящий в состав JAR архива. 
+
+...
+try {
+   InputStream is = getClass().getResourceAsStream("audio.wav");
+   Player player = Manager.createPlayer(is, "audio/X-wav");
+   p.start();
+} 
+catch(IOException ioe) {
+} 
+catch(MediaException me) {
+}
+...
+Воспроизведение видео
+
+Приведенный ниже код показывает, как организовать воспроизведение MPEG видео. 
+
+...
+Player p;
+VideoControl vc; 
+try {
+   p = Manager.createPlayer("http://server/somemovie.mpg");
+   p.realize();
+   // Получаем управление для видео
+   vc = (VideoControl) p.getControl("VideoControl");
+   ....
+   p.start();
+} 
+catch(IOException ioe) {
+} 
+catch(MediaException me) {
+}
+...
+
+Использование камеры
+
+MMAPI обеспечивает поддержку встроенной камеры. Для ее использования при создании плеера нужно задать параметр capture://video . Для управления используется VideoControl, например, для получения картинки с камеры нужно вызвать метод VideoControl.getSnapshot(String imageType). По умолчанию картинка возвращается в формате PNG. Вы можете использовать параметр imageType, чтобы выбрать другой доступный формат. Доступные форматы можно узнать, получив значение системного параметра video.snapshot.encodings. 
+J2ME Wireless Toolkit и MMAPI
+
+J2ME Wireless Toolkit 2.0 поддерживает MMAPI. Среди входящих в его состав примеров есть программы, использующие MMAPI. Вы прямо сейчас можете открыть пример mmademo и запустить его. Обратите внимание, в mmademo воспроизведение некоторых файлов требует подключения к интернету. 
+Поддерживаемые форматы
+
+J2ME Wireless Toolkit поддерживает следующие форматы 
+Audio: PCM и WAV 
+MIDI: Type 0 (single track), Type 1 (multiple tracks) и SP-MIDI 
+Video: MPEG-1 
+Ограничения использования MMAPI в WTK
+
+Имейте в виду, что J2ME Wireless Toolkit имеет следующие ограничения (Помните о том, что каждое конкретное устройство имеет свои собственные ограничения): 
+Хотя вы можете создать в приложении несколько различных плееров, в данный момент времени может использоваться только один MIDI плеер. В противном случае возникнет ошибка MediaException. 
+WTK позволяет одновременно вызвать любое количество playTone(), однако, гарантированно будут воспроизведены только четыре ноты. Метод playTone() можно вызывать во время воспроизведения MIDI последовательности. 
+Число видео плееров ограничено размером динамической памяти и задается в параметре Xheapsize команды emulator (если Вы вызываете эмулятор из командной строки) или в пункте меню KToolBar Edit -> Preferences -> Storage 
+Число WAV аудио плееров также ограничено размером динамической памяти. 
+В данный момент времени может воспроизводиться только один аудио файл. 
+
+Кроме того, WTK ограничивает число одновременно открытых HTTP соединений (не более четырех). 
+Пример простого медиаплеера
+
+Чтобы не быть голословным я написал небольшой пример медиаплеера, использующего Mobile Media API. PlayerMIDlet позволяет проигрывать файлы, загруженные из сети. Для этого необходимо указать их URL. 
+
+import javax.microedition.lcdui.*;
+import javax.microedition.media.*;
+import javax.microedition.media.control.*;
+import javax.microedition.midlet.*;
+
+public class PlayerMIDlet extends MIDlet implements 
+  CommandListener, PlayerListener, Runnable {
+   private Display display;
+   private Form form;
+   private TextField url;
+   private Command start = new Command("Play", 
+     Command.SCREEN, 1);
+   private Command stop = new Command("Stop", 
+     Command.SCREEN, 2);
+   private Player player;
+      
+   public PlayerMIDlet() {
+      display = Display.getDisplay(this);
+      form = new Form("Demo Player");
+      url = new TextField("Enter URL:", "", 100, TextField.URL);
+      form.append(url);
+      form.addCommand(start);
+      form.addCommand(stop);
+      form.setCommandListener(this);
+      display.setCurrent(form);
+   }
+
+   protected void startApp() {
+      try {
+         if(player != null && player.getState() == Player.PREFETCHED) {
+            player.start();
+         } else {
+            defplayer();
+            display.setCurrent(form);
+         }
+      } 
+      catch(MediaException me) {
+         reset();
+      }
+   }
+
+   protected void pauseApp() {
+      try {
+         if(player != null && player.getState() == 
+           Player.STARTED) {
+            player.stop();
+         } else {
+            defplayer();
+         }
+      } 
+      catch(MediaException me) {
+         reset();
+      }
+   }
+
+   protected void destroyApp(
+      boolean unconditional) {
+      form = null;
+      try {
+         defplayer();
+      } 
+      catch(MediaException me) {
+      }
+   }
+
+   public void playerUpdate(Player player, 
+     String event, Object data) {
+      if(event == PlayerListener.END_OF_MEDIA) {
+         try {
+            defplayer();
+         } 
+         catch(MediaException me) {
+         }
+         reset();
+      }
+   }
+
+   public void commandAction(Command c, Displayable d) {
+      if(c == start) { 
+         start();
+      } else if(c == stop) {
+         stopPlayer();
+      }
+   }
+
+   public void start() {
+      Thread t = new Thread(this);
+      t.start();
+   }
+   // Для предотвращение блокировки, все действия
+   // по работе с сетью должны выполняться
+   // в отдельном потоке, а не в commandAction.
+   public void run() {
+      play(getURL());
+   }
+
+   String getURL() { 
+     return url.getString();
+   }
+
+   void play(String url) {
+      try {
+         VideoControl vc;
+         defplayer();
+         // создаем плеер
+         player = Manager.createPlayer(url);
+         player.addPlayerListener(this);
+         player.realize();
+         vc = (VideoControl)player.getControl("VideoControl");
+         if(vc != null) {
+            Item video = (Item)vc.initDisplayMode(
+                vc.USE_GUI_PRIMITIVE, null);
+            Form v = new Form("Playing Video...");
+            StringItem si = new StringItem("Status: ", "Playing...");
+            v.append(si);
+            v.append(video);
+            display.setCurrent(v);
+         }
+         player.prefetch();
+         player.start();
+      }
+      catch(Throwable t) {
+         reset();
+      }
+   }
+
+   void defplayer() throws MediaException {
+      if (player != null) {
+         if(player.getState() == Player.STARTED) {
+            player.stop();
+         }
+         if(player.getState() == Player.PREFETCHED) {
+            player.deallocate();
+         }
+         if(player.getState() == Player.REALIZED || 
+           player.getState() == Player.UNREALIZED) {
+            player.close();
+         }
+      }
+      player = null;
+   }
+
+   void reset() {
+      player = null;
+   }
+
+   void stopPlayer() {
+      try {
+         defplayer();
+      } 
+      catch(MediaException me) {
+      }
+      reset();
+   }
+}
+
+
+В методе play() реализованы следующие функции: 
+Cоздание экземпляра Player. 
+Регистрация мидлета как PlayerListener, поскольку наш мидлет переопределяет метод playerUpdate() интерфейса PlayerListener. Когда происходит какое либо событие, связанное с воспроизведением звука, все PlayerListener-ы получают соответствующее уведомление. Например, при завершении воспроизведения вызывается событие, обозначенное константой PlayerListener.END_OF_MEDIA. 
+Проверяет, был ли создан VideoControl. Если да, выполняет инициализацию компоненты экрана Item и добавляет ее на форму. 
+Выбирает плеер и запускает его. 
+
+Вы можете проверить работоспособность данного примера , используя J2ME Wireless Toolkit 2.0. Создайте новый проект и скопируйте исходный код в файл /apps/SimplePlayer/src/PlayerMIDlet.java. Выполните компиляцию и запустите мидлет. Для проверки можете использовать следующие URL адреса: 
+http://java.sun.com/products/java-media/mma/media/test-wav.wav 
+http://java.sun.com/products/java-media/mma/media/test-mpeg.mpg 
+Заключение
+
+В этой статье была рассмотрена архитектура Mobile Media API и приведены примеры использования ее возможностей для воспроизведения различной мультимедийной информации. Были разобраны части стандартного примера mmademo, входящего в состав J2ME Wireless Toolkit 2.0.

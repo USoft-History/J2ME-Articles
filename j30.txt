@@ -1,0 +1,150 @@
+Как послать SMS? (Часть 1)  
+Автор: Mank
+ Дата публикации: 23.09.2003 10:18
+ 
+
+J2ME 
+  
+
+При сталкивании с технологией J2ME у многих сразу же возникает желание послать sms сообщение силами мидлета. И сразу же возникает вопрос: "А как?". В данной статье я попытаюсь ответить на этот вопрос.  
+
+Немного истории
+После принятого многими производителями на вооружение MIDP 1.0, несмотря на все его достоинства, он изобиловал пробелами. И один из основных недостатков, как раз и заключался в отсутствии какого-либо API для работы с sms сообщениями. В защиту MIDP 1.0 стоит сказать, что его заслуга была в том, что он смог разродится из ничего, и стал основой для будущего. 
+
+
+В отсутствии стандарта, производители сотовых телефонов пытались восполнить этот пробел, создавая свой API для данных целей. 
+
+Siemens – класс com.siemens.mp.gsm.SMS. Имеет всего два метода: send (java.lang.String number, byte[] data), send (java.lang.String number, java.lang.String data) 
+Samsung – пакет com.samsung.util содержит три класса, для данной цели: SMS, SM, SMSListener. Класс SMS состоит из двух методов send (com.samsung.util.SM sm) и isSupported(). Класс SM представляет собой sms сообщение. Что касательно SMSListener, то в силу безобразно написанного фирмой Samsung javadoc (по крайне мере той версии, которую я скачал), непонятно где SMSListener должен быть зарегистрирован. 
+Nokia – Nokia SMS API. Так как в то время, когда Nokia соизволила, наконец, таки добавить поддержку SMS, Wireless Messaging API (JSR 120) еще разрабатывался Java Community Process. В результате Nokia пришлось, в силу рыночных тенденций, ввести пакет com.nokia.mid.messaging, который, по сути, являлся прообразом JSR 120 у Nokia. 
+Wireless Messaging API 1.1 
+(JSR 120) 
+Вот мы подошли к той части статьи, которая ответит на все наши вопросы. Учитывая все недостатки представленные выше, Java Community Process разработал JSR 120. Экспертная группа состояла из таких фирм как: 
+
+Motorola 
+Siemens 
+Sun 
+Vodafone 
+NEC 
+Nokia 
+Symbian 
+Цель Wireless Messaging API определить опциональный API, который даст возможность разработчикам, работать со следующими технологиями: 
+
+SMS (Short Message Service) – Послать и получить текст 
+USSD (Unstructured Supplementary Service Data) – использование для обмена данными 
+CBS (Cell Broadcast Service) – Позволять получать cell broadcast data 
+Теперь, покончив с определениями, перейдем к рассмотрению Wireless Messaging API. Итак, Wireless Messaging API 1.1 определяет пакет javax.wireless.messaging, который состоит всего из пяти классов: 
+
+
+MessageConnection – интерфейс, определяет операции для посылки и получения сообщений. 
+MessageListener – интерфейс, позволяет мидлету получать уведомления о входящих сообщениях. 
+Message – основной интерфейс для представления сообщений. 
+TextMessage – интерфейс производный от Message, представляет текстовые сообщения. 
+BinaryMessage – интерфейс производный от Message, представляет бинарные сообщения. 
+Прежде чем двигаться дальше, сразу же приведу пример, полностью скопированный из спецификации. 
+Пример 1 
+
+
+01:  import javax.microedition.io.*;
+02:  import javax.wireless.messaging.*;
+
+
+03:  try
+04:  {
+  05:    String addr = "sms://+358401234567";
+  06:    MessageConnection conn =
+  07:      (MessageConnection) Connector.open (addr);
+  08:    TextMessage msg =
+  09:       (TextMessage)conn.newMessage (MessageConnection.TEXT_MESSAGE);
+  10:     msg.setPayloadText ("Hello World!");
+  11:     conn.send (msg);
+  12:  }
+13:  catch (Exception e) {}
+ 
+
+
+
+В принципе из этого примера уже ясен весь JSR 120, можно было бы, и закончить разговор, но давайте рассмотрим некоторые детали. 
+
+MessageConnection реализует интерфейс Connection из Generic Connection Framework. Таким образом, операция установления соединения, для получения или посылки сообщения, аналогична установлению обычного соединения (http, socket, file). (Пример 1, Строка 06-07). MessageConnection может работать в двух режимах: в клиентском и серверном ("client" and "server" mode). 
+
+Если вы в методе open класса Conector передаете адрес назначения, то вы получите объект MessageConnection, который будет работать в клиентском режиме ("client" mode). В данном режиме вы сможете только послать сообщение. 
+
+Если вы хотите получать сообщения, тогда вам нужен серверный режим ("server" mode). Он создается таким же образом, только необходимо указать не адрес назначения, а URL. После этого MessageConnection можно использовать для получения и отправки сообщений (Пример 2). 
+Пример 2 
+
+
+
+01:  import javax.microedition.io.*;
+02:  import javax.wireless.messaging.*;
+
+
+03:  try
+04:  {
+  05:    String addr = "sms://:5432";
+  06:    MessageConnection conn =
+  07:      (MessageConnection) Connector.open (addr);
+  08:    Message msg = null;
+  09:    while (someExitCondition)
+  10:    {
+    11:      msg = conn.receive();
+    12:      if (msg instanceof TextMessage)
+    13:      {
+      14:        TextMessage tmsg = (TextMessage)msg;
+      15:        String receivedText = tmsg.getPayloadText();
+      16:        tmsg.setPayloadText ("Received:" + receivedText);
+      17:        conn.send(tmsg);
+      18:       }
+    19:     }
+  20:  }
+21:  catch (Exception e) {}
+ 
+
+
+
+Для создания сообщений MessageConnection, предоставляет фабрику-метод newMessage (Пример 1, Строка 08-09). Метод send позволяет отправлять сообщения (Пример 1, Строка 11). Получить сообщения можно при помощи блокирующего метода receive (Пример 2, Строка 12) или асинхронно, установив MessageListener при помощи метода setMessageListener (MessageListeenr l). Следует сразу добавить, что MessageConnection не поддерживает потоковые операции. В случае вызовов Connector.open*Stream методов, будет генерироваться IllegalArgumentException. 
+
+Message – корневой интерфейс для производных от него интерфейсов, которые представляют различного типа сообщения. При посылке сообщения адресату, тот быть не доступен в данный момент, в этом случае сообщение будет доставлено ему позднее. Роль доставки сообщения, как мы и привыкли, возлагается на сервис-центр. Ну и не стоит забывать, что за посылку сообщения вы будете платить деньги, по тарифам вашего оператора. 
+
+Интерфейс определяет всего три метода: 
+
+
+java.lang.String getAddress – возвращает адрес получателя, в случае если сообщения создано для отправки, или адрес отправителя, если сообщение было принято. 
+java.util.Date getTimestamp – возвращает время, когда сообщения было послано. 
+setAddress (java.lang.String addr) – устанавливает адрес. Адрес должен быть в том же формате, который используется при создании MessageConnector объекта. 
+TextMessage – интерфейс для представления текстовых сообщений, расширяющий интрефейс Message. TextMessage добавляет два метода: 
+
+java.lang.String getPayloadText() – возвращает текст сообщения 
+setPayloadText (java.lang.String text) – устанавливает текст сообщения 
+Получить экземпляр класса TextMessage можно при помощи фабрики-метода MessageConnection.newMessage (MessageConnection.TEXT_MESSAGE) 
+BinaryMessage – интерфейс для представления бинарных сообщений, расширяющий интерфейс Message. BinaryMessage добавляет два метода: 
+
+byte [] getPayloadData() – возвращает байтовый массив 
+setPayloadData (byte [] data) – устанавливает байтовый массив 
+Получить экземпляр класса BinaryMessage можно при помощи фабрики-метода MessageConnection.newMessage (MessageConnection.BINARY_MESSAGE) 
+MessageListener – зарегистрировав данного слушателя у экземпляра класса MessageConnection, мидлет будет извещаться о поступающих сообщениях. После того, как на телефон поступит сообщение, будет вызван единственный метод интерфейса MessageListener notifyIncomingMessage (MessageConnection conn). После этого, для того чтобы получить сообщение, следует вызвать метод receive класса MessageConnection. При этом следует не упускать из виду следующий момент, MessageListener не должен вызывать метод receive напрямую. Вы должны вызвать его из другой нитки (Thread). 
+
+Wireless Messaging API 2.0 
+(JSR 205) 
+JSR 120 не смог удовлетворить все запросы J2ME сообщества, поэтому экспертная группа продолжила работать над Wireless Messaging API 2.0. В результате появился JSR 205 (его текущий статус – Public Review Draft 0.7). Основные цели: 
+
+
+API будет определять интерфейсы для получения и отправки MMS. 
+Возможность посылать и получать сообщения, которые содержат, текст, изображения, звук. 
+В пакете javax.wireless.messaging.mms будут классы и интерфейсы для работы с MMS. Что касается пакета javax.wireless.messaging, то в него уже добавлен один интерфейс, один класс и исключение SizeExceededException: 
+
+
+MultipartMessage – интерфейс для представления составных сообщений. 
+MessagePart – экземпляры данного класса могут быть добавлены в MultipartMessage. Каждый MessagePart состоит из данных, MIME type [RFC 2046] и content-id [RFC 2046]. 
+Так как Wireless Messaging API 2.0 еще не готов, о нем еще мало, что можно сказать. Поэтому пока, что я на этом и ограничу свой рассказ. 
+
+
+Выводы
+Wireless Messaging API предоставляет удобный механизм, для того, чтобы можно было бы послать или получить сообщение. Кроме того, работа над API не стоит на месте и в ближайшее время, появится ряд новых возможностей. Минус пока, что только один – отсутствие телефонов реализующих этот API, но они уже есть. В следующий раз я постараюсь рассказать о некоторых аспектах Wireless Messaging API 1.1 (вопросы security, SMS и CBS Adapter и т.д.) и Wireless Messaging API 2.0 (MultipartMessage, MessagePart) более подробно и привести ряд примеров. 
+
+Ссылки 
+Java Community Process 
+JSR 120 
+JSR 205 
+MIDP 
+ 

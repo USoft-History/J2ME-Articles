@@ -1,0 +1,43 @@
+Transparency using Mascot Capsule Micro3D v3 API	
+[Back]
+
+ 
+
+The Mascot Capsule Micro3D v3 API's support masking of colors and four modes of blending.
+
+When blending colors, the RGB values from the background are individually mixed with the RGB colors from the texture. Note that Half, Addition, and Subtract modes cannot be used at the same time for the same polygon.
+
+The following table shows how the colors are mixed together.
+Attribute   	Background   	Texture   
+Normal	0 %	+ 100 %
+Half	50 %	+ 50 %
+Add	100 %	+ 100 %
+Sub	100 %	- 100 %
+
+
+ 
+Use one of the following commands to perform blending:
+ 
+Graphics3D.PATTR_BLEND_NORMAL
+Graphics3D.PATTR_BLEND_HALF
+Graphics3D.PATTR_BLEND_ADD
+Graphics3D.PATTR_BLEND_SUB
+ 
+// example command
+private final int COMMAND = Graphics3D.PDATA_NORMAL_NONE |
+Graphics3D.PDATA_TEXURE_COORD |
+                              Graphics3D.PRIMITVE_QUADS |
+                              Graphics3D.PATTR_BLEND_HALF;
+ 
+Do not forget setting the effect to use transparency:
+effect.setTransparency(true);
+ 
+Masking is just as simple. Just use the command Graphics3D.PATTR_COLORKEY, with an index value of zero in the palette used for the image, to mask out the first color.
+ 
+When masking colors, you don't have to set the effect to use transparency.
+ 
+The Ghost images below show the difference when using 1) Normal, 2) PATTR_COLORKEY and 3) PATTR_BLEND_HALF | PATTR_COLORKEY.
+ 
+ 	  	
+	Download Ghost Transparency code sample>>
+http://developer.sonyericsson.com/getDocument.do?docId=70515

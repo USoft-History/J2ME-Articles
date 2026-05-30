@@ -1,0 +1,75 @@
+Запись звука с микрофона и его проигрывание с помощью J2ME MMAPI
+
+В данной статье рассказывается, как с помощью MMAPI осуществить запись и воспроизведение звука в J2ME. 
+Запись звука с микрофона
+
+Прежде всего, необходимо создать объект Player, который будет получать поток данных от микрофона. 
+
+Player player;
+...
+player=Manager.createPlayer(“capture://audio?encoding=amr”);
+player.realize();
+
+Здесь мы использовали строку вида capture://audio?encoding=amr, это простейший путь получить запись с эффектом Микки Мауса на телефоне Nokia 6600. Если Вы собираетесь использовать другое оборудование, попробуйте использовать capture://audio или другие кодировки: 
+
+audio_encodings = audio_enc_param *( "&" audio_param )
+audio_enc_param = "encoding=" audio_enc
+audio_enc = "pcm" / "ulaw" / "gsm" / content_type
+audio_param = "rate=" rate /
+"bits=" bits /
+"channels=" channels /
+"endian=" endian /
+"signed=" signed /
+"type=" audio_type
+rate = "96000" / "48000" / "44100" /
+"22050" / "16000" / "11025" /
+"8000" / other_rate
+other_rate = pos_integer
+bits = "8" / "16" / "24" / other_bits
+other_bits = pos_integer
+channels = pos_integer
+endian = "little" / "big"
+signed = "signed" / "unsigned"
+audio_type = bitrate_variable / other_type
+other_type = alphanumeric
+pos_integer = 1*DIGIT 
+
+Напимер:
+
+capture://audio?rate=8000&bits=16
+capture://audio?encoding=pcm&signed=unsigned
+
+
+Чтобы определить какие из параметров захвата звука поддерживаются Вашим телефоном, попробуйте выполнить следующий код. К сожалению, он работает не на всех телефонах. 
+
+String[] types= Manager.getSupportedContentTypes("capture");
+for( int i= 0; i < types.length; i++ )
+someStringItem.setText(errorItem.getText() + " "+types[i]);
+
+Для начла записи необходимо создать объект RecordControl. Обязательно создайте поток ByteArayOutputStream, куда будет писать входящие данные. 
+
+RecordControl rc = (RecordControl)player.getControl("RecordControl");
+ByteArrayOutputStream output = new ByteArrayOutputStream();
+rc.setRecordStream(output);
+rc.startRecord();
+player.start();
+
+После начала записи необходимо указать время, которое Вы собираетесь записать. Для остановки записи можете использовать любое событие, например нажатие не клавишу, или просто дождитесь окончания времени записи. В приведенном ниже примере производится пятисекундная запись звука, после чего rc.commit() останавливает ее. 
+
+Thread.currentThread().sleep(5000);
+rc.commit();
+
+Записанный звук можно легко сохранить в RMS. Если вы не собираетесь долго хранить эту запись, ее можно перенести в массив байт, а затем прослушать. 
+
+byte[] recordedSoundArray = output.toByteArray(); 
+Воспроизведение записи
+
+Приведенный ниже код воспроизводит сделанную запись: 
+
+ByteArrayInputStream recordedInputStream = new ByteArrayInputStream(recordedSoundArray);
+Player p2 = Manager.createPlayer(recordedInputStream,"audio/x-wav");
+p2.prefetch();
+p2.start();
+Заключение
+
+Надо сказать, что рассмотренный метод будет работать только на устройствах, которые позволяют MMAPI осуществить захват входящего аудио или видео с оборудования телефона (с микрофона или камеры). К таким устройствам, например, относятся телефоны Nokia 6600 (Software version 4.09.1) и Siemens S65. Рабочий код можно найти здесь.

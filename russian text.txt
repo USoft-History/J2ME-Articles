@@ -1,0 +1,157 @@
+Как загрузить русский текст
+
+При разработке мидлетов, довольно часто бывает нужно загрузить какие-нибудь данные из текстового файла в переменную. На одном из форумов по j2me программированию я наткнулся на простую реализацию метода, позволяющего считывать данные из ASCII текстового файла. 
+
+private String getText(String path) {
+        DataInputStream dis = new DataInputStream(getClass().getResourceAsStream(path));
+        StringBuffer strBuff = new StringBuffer(); 
+        int ch = 0;
+        try {
+            while ((ch = dis.read()) != -1) {
+                strBuff.append((char ) ((ch >= 0xc0 && ch <= 0xFF) ? (ch + 0x350) : ch));
+            }
+            dis.close();
+        } catch (Exception e) {
+            System.err.println("ERROR in getText() " + e);
+        }
+        return strBuff.toString();
+}
+
+Для того чтобы использовать этот метод, необходимо подключить к java мидлету пакеты java.io.*. В качестве параметра методу getText передается путь к файлу. Корневой считается папка res/ вашего проекта. То есть, getText(«/book.txt») загрузит файл <Ваш проект>/res/book.txt. (Дело в том, что после сборки jar архива файлы из папки ресурсов помещаются в ту же папку, что и откомпилированные файлы классов.) 
+
+Как видите, все просто. Создается входящий поток данных dis, связанный с текстовым файлом, откуда побайтно читаются данные в строковый буфер strBuff, который потом преобразуется в строку и возвращается из метода. 
+
+Пожалуй единственным не очевидным моментом в коде метода является строчка: 
+
+strBuff.append((char) ((ch >= 0xc0 && ch <= 0xFF) ? (ch + 0x350) : ch)); 
+
+Дело в том, что если использовать строчку 
+
+strBuff.append((char)ch) 
+
+то данные тоже будут считываться, но у нас возникнут проблемы с русскими буквами при отображении. Эта строка нужна для корректного перевода русского текста из кодировки ASCII в Unicode. 
+
+Предлагаю разобраться с принципом работы метода на простом примере. Создайте новый мидлет. Я использовал SampleMidlet каркас из статьи «Пишем софт для телефона». Давайте Создадим форму и добавим на нее StringItem, в который и загрузим текст из файла. В общем, у меня получилось следующее. 
+
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+//Подключаепм пакет для работы с вводом/выводом
+import java.io.*;          
+
+public class SampleMIDlet extends MIDlet implements CommandListener{
+
+    private Display display;
+    private Form MainForm; //Форма
+    private StringItem StrFromTxt; //Сторка, которая будет грузиться из текстового файла
+    private Command CMD_EXIT = new Command("Выход", Command.EXIT, 1); //Комманда выхода из мидлета 
+
+    public SampleMIDlet(){}
+
+    protected void destroyApp( boolean unconditional ) throws MIDletStateChangeException 
+     {
+       exitApp();
+      }
+
+    protected void pauseApp(){}
+
+    protected void startApp() throws MIDletStateChangeException
+     {
+         if( display == null )
+              { 
+                  initApp( ); // Этот код выполняется при запуске мидлета
+              } 
+     }
+
+    private void initApp()
+     {
+       display = Display.getDisplay( this );
+         MainForm = new Form("www.MobiLab.ru"); //Создаем форму
+         MainForm.setCommandListener(this); ///Ловим команды от формы 
+         MainForm.addCommand(CMD_EXIT); //Добавляем кнопку «Выход» на панель
+
+         String str=getText("/book.txt"); //Грузим в текстовую переменную данные из файла
+         
+         //Создаем StringItem компонент на основе загруженного текста
+         StrFromTxt = new StringItem("?????: ",str); 
+         
+         MainForm.append(StrFromTxt); //Добавляем на форму компонент с текстом
+         display.setCurrent(MainForm); //Отображаем форму
+     }
+
+    public void exitApp()
+     {
+         notifyDestroyed(); // уничтожение MIDlet-а
+     }
+
+    public void commandAction(Command c, Displayable d) {
+        if (c == CMD_EXIT){exitApp();}     //Команда "Выход"
+    }
+
+private String getText(String path) {
+        DataInputStream dis = new DataInputStream(getClass().getResourceAsStream(path));
+        StringBuffer strBuff = new StringBuffer(); 
+        int ch = 0;
+        try {
+            while ((ch = dis.read()) != -1) {
+                strBuff.append((char ) ((ch >= 0xc0 && ch <= 0xFF) ? (ch + 0x350) : ch));
+            }
+            dis.close();
+        } catch (Exception e) {
+            System.err.println("ERROR in getText() " + e);
+        }
+        return strBuff.toString();
+} 
+
+}
+
+Cоздадим в папке /res/ проекта текстовый файл book.txt с каким-нибудь текстом. Все, можно запускать и тестировать приложение. 
+Загрузка числовых данных из файла
+
+В своих проектах я часто использую конфигурационные файлы, куда помещаю разную текстовую и числовую информацию. Для разделения информации я использую символы-разделители (обычно '|'). Для того чтобы загрузить информацию в переменные, нужно считать ее из файла с помощью уже рассмотренного метода getText(), а затем вычленить данные выполняя поиск символов разделителей. После того как данные вычленены, их можно перевести в необходимый формат (int, double). 
+
+Рассмотрим пример. Пусть в конфигурационном файле содержится три параметра: Имя пользователя, его год рождения и вес(с точностью до грамма :) ). Создадим в папке res проекта файл config.ini с текстом 
+
+Василий|1973|86.998| 
+
+Создадим класс подобный рассмотренному Выше. Изменения коснутся только метода initApp(): 
+
+    private void initApp()
+     {
+      display = Display.getDisplay( this );
+         MainForm = new Form("www.MobiLab.ru"); //Создаем форму
+         MainForm.setCommandListener(this); 
+         MainForm.addCommand(CMD_EXIT);
+         display.setCurrent(MainForm); //Отображаем форму
+          //Прочитаем из текстового файла строку
+         String str=getText("/config.ini"); //Грузим файл конфигурации в строковую переменную
+      
+         int i0=0, i=0;
+         String s1; //Вспомогательная строка. (исключительно для наглядности)
+
+         i = str.indexOf("|",i0+1); //Ищем символ "|" в строке, начиная с i0+1 буквы
+         String Name=str.substring(i0,i); //Выделяем часть строки с i0 по i-ый символ
+
+         i0=i;
+         i = str.indexOf("|",i0+1); //Ищем следующий символ
+         s1=str.substring(i0+1,i);
+         int Year=(int)Integer.parseInt(s1); //Преобразуем строку в число
+        
+         i0=i;
+         i = str.indexOf("|",i0+1); //Ищем следующий символ
+         s1=str.substring(i0+1,i);
+         double Weight=(double)Double.parseDouble(s1); //Преобразуем строку в вещественное число
+
+         StringItem SI1= new StringItem("Имя: ",Name); 
+         StringItem SI2= new StringItem("Год: ",""+Year); 
+         StringItem SI3= new StringItem("Вес: ",""+Weight); 
+         MainForm.append(SI1);
+         MainForm.append(SI2);
+         MainForm.append(SI3);
+     }
+
+Как видите, ничего сложного. 
+Загружаем в i0 номер номер последнего найденного символа. 
+С помощью метода indexOf() ищем следующий символ, начиная с i0 
+С помощью substring вырезаем часть строки и помещаем ее в новую переменную 
+Преобразовываем строку к необходимому нам типу 
+возвращаемся на шаг 1

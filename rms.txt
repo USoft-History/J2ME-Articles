@@ -1,0 +1,265 @@
+27 июня 2005 г. - Основы использования Record Management System в MIDlet-ах
+
+
+
+Mobile Information Device Profile (MIDP) предоставляет в распоряжение разработчика набор классов для сохранения и восстановления данных. Эти классы объединены названием Record Management System (RMS). С помощью RMS можно сохранить данные, и они не будут уничтожены после закрытия мидлета. Доступ к RMS могут получить только мидлеты входящие в состав набора (MIDlet suite - набор мидлетов упакованных вместе в один jar файл.), другими словами к записи в RMS может получить доступ только приложение, которое ее создало. 
+
+Механизм хранения памяти, используемый RMS известен под названием "record store". Record store - это набор записей - байтовых массивов произвольных данных. Размер массива может изменяться для каждой записи. RMS не интересует какие данные она сохраняет. Она не вносит никаких изменений. RMS ограничивается присвоением каждой записи уникального идентификатора, который остается неизменным на протяжении всей "жизни" записи. 
+
+Классы record store размещаются в javax.microedition.rms.RecordStore. Единственным способом получит объект RecordStore является использование метода openRecordStore: 
+
+import javax.microedition.rms.*;
+
+RecordStore rs = null;
+
+try {
+    rs = RecordStore.openRecordStore( "mydata", false );
+}
+catch( RecordStoreNotFoundException e ){
+    // не существует
+}
+catch( RecordStoreException e ){
+    // какие-то другие ошибки
+}
+
+Первый параметр openRecordStore - это имя record store. Оно не должно быть не длиннее 32 символов. Имя должно быть уникальным в рамках данного набора мидлетов. (Мидлеты, не входящие в данный набор, ни при каких условиях не смогут получить доступ к этой record store.) Второй параметр говорит, нужно ли создавать новую record store, если record store с указанным именем не существует, или нужно сгенерировать исключительную ситуацию RecordStoreNotFoundException. RecordStoreNotFoundException является расширением RecordStoreException - корневого класса всех исключительных ситуаций RMS. RecordStoreException возникает, если record store не может быть создана по причине отсутствия памяти, либо других внутренних ошибок. 
+
+В любой момент времени для каждой record store существует единственный экземпляр RecordStore. Если два или более мидлетов одного набора одновременно откроют некоторую record store, все они будут иметь дело с одним и тем же экземпляром объекта RecordStore. 
+
+После того, как record store открыта, Вы можете закрыть ее, вызвав метод closeRecordStore : 
+
+try {
+    rs.closeRecordStore();
+}
+catch( RecordStoreNotOpenException e ){
+    // уже закрыта
+}
+catch( RecordStoreException e ){
+    // какие-то другие ошибки
+}
+
+Фактически record store не закроется до тех пор, пока Вы не вызовите метод closeRecordStore столько раз, сколько вызывали openRecordStore. 
+
+Для того, чтобы добавить запись в открытую record store, используйте метод addRecord: 
+
+byte[] data = new byte[2];
+
+data[0] = 0;
+data[1] = 1;
+
+try {
+    int id = rs.addRecord( data, 0, data.length );
+}
+catch( RecordStoreFullException e ){
+    // данные не умещаются в памяти
+}
+catch( RecordStoreNotOpenException e ){
+    // record store была закрыта
+}
+catch( RecordStoreException e ){
+    // другие ошибки
+}
+
+В случае успешного выполнения addRecord возвращает уникальный идентификатор новой записи. Идентификаторы записи (ID) начинаются с 1 и увеличиваются на единицу для каждой последующей записи. Для того, чтобы узнать какой идентификатор будет присвоен следующей записи, воспользуйтесь методом getNextRecordID. 
+
+Для того чтобы удалить запись, используйте метод deleteRecord. Единственным его параметром является ID удаляемой записи. 
+
+Метод getRecord считывает содержание указанной записи. Существует две реализации этого метода: одна реализация требует ID в качестве единственного параметра и возвращает массив байтов, содержащих данные записи; вторая - заполняет переданный в качестве параметра массив байтов: 
+
+byte[] data = new byte[100];
+int id = ....; // ID записи
+
+try {
+    int numBytes = rs.getRecord( id, data, 0 );
+}
+catch( ArrayIndexOutOfBoundsException e ){
+    // запись не помещается в переданный массив
+}
+catch( InvalidRecordIDException e ){
+    // записи с таким ID не существует
+}
+catch( RecordStoreNotOpenException e ){
+    // record store была закрыта
+} 
+catch( RecordStoreException e ){
+    // другие ошибки
+}
+
+Здесь первый параметр - ID записи, второй - массив, куда будет скопировано содержание записи; третий - смещение с которого необходимо начать копирование. Массив байтов должен быть достаточно велик, чтобы разместить всю запись (можете использовать метод getRecordSize, чтобы узнать ее размер). Второй способ реализации предпочтительней, поскольку он использует на много меньше памяти и не загружает работой уборщика мусора. 
+
+Чтобы переместить запись, воспользуйтесь методом setRecord: 
+
+byte[] data = new byte[3];
+int id = ....; // get the ID from somewhere
+
+data[0] = 0;
+data[1] = 1;
+data[2] = 2;
+
+try {
+    rs.setRecord( id, data, 0, data.length );
+}
+catch( ArrayIndexOutOfBoundsException e ){
+    // запись не помещается в переданный массив
+}
+catch( InvalidRecordIDException e ){
+    // записи с таким ID не существует
+}
+catch( RecordStoreNotOpenException e ){
+    // record store была закрыта
+} 
+catch( RecordStoreException e ){
+    // другие ошибки
+}
+
+
+Обратите внимание на то, что не существует способа изменить часть данных в записи. Вы можете только заменить ее новым массивом байт. 
+
+Теперь, когда Вы узнали все методы, необходимые для работы с RMS, давайте рассмотрим законченный пример. Ниже приведен мидлет, который выводит содержание произвольной record store: 
+
+import java.io.*;
+import javax.microedition.midlet.*;
+import javax.microedition.rms.*;
+
+public class TestStore extends MIDlet {
+
+    static final String DBNAME = "mydata";
+
+    public TestStore() {
+
+        RecordStore rs = null;
+
+        // Поскольку данные сохраняются между запусками.
+        // MIDlet-ов, первым делом очистим старую record store...
+
+        try {
+            RecordStore.deleteRecordStore( DBNAME );
+        }
+        catch( Exception e ){
+            // ignore any errors...
+        }
+
+        // Теперь создадим новую и выведем каждый элемент 
+
+        try {
+            rs = RecordStore.openRecordStore( DBNAME, 
+                          true );
+
+            byte[] data1 = "Это первая запись".getBytes();
+            byte[] data2 = "Это вторая".getBytes();
+            byte[] data3 = "А это третья".getBytes();
+
+            data3[0] = 0;
+            data3[data3.length-1] = (byte) -1;
+
+            rs.addRecord( data1, 0, data1.length );
+            rs.addRecord( data2, 0, data2.length );
+            rs.addRecord( data3, 0, data3.length );
+
+            dumpRecordStore( rs, System.out );
+
+            rs.closeRecordStore();
+        }
+        catch( RecordStoreException e ){
+            System.out.println( e );
+        }
+
+        notifyDestroyed();
+    }
+
+    public void dumpRecordStore( RecordStore rs, 
+                     PrintStream out )
+    {
+        if( rs == null ) return;
+
+        StringBuffer hexLine = new StringBuffer();
+        StringBuffer charLine = new StringBuffer();
+
+        try {
+            int lastID = rs.getNextRecordID();
+            byte[] data = new byte[100];
+            int size;
+
+            for( int i = 1; i < lastid; ++i ){
+                try {
+                    size = rs.getrecordsize( i );
+                    if( size > data.length ){
+                        data = new byte[ size * 2 ];
+                    }
+
+                    out.println( "Запись " + i + " размером " + size );
+
+                    rs.getRecord( i, data, 0 );
+                    dumpRecord( data, size, out, 
+                hexLine, charLine, 16 );
+
+                    out.println( "" );
+                }
+                catch( InvalidRecordIDException e ){
+                    continue;
+                }
+            }
+        }
+        catch( RecordStoreException e ){
+            out.println( "Ошибка при чтении record store: " + e );
+        }
+    }
+ 
+    private void dumpRecord( byte[] data, int size,
+                             PrintStream out,
+                             StringBuffer hexLine,
+                             StringBuffer charLine,
+                             int maxLen )
+    {
+        if( size == 0 ) return;
+
+        hexLine.setLength( 0 );
+        charLine.setLength( 0 );
+
+        int count = 0;
+
+        for( int i = 0; i < size; ++i ){
+            char b = (char) ( data[i] & 0xff );
+
+            if( b < 0x10 ){
+                hexline.append( '0' );
+            }
+
+            hexline.append( integer.tohexstring( b ) );
+            hexline.append( ' ' );
+
+            if( ( b >= 32 && b <= 127 ) ||
+                character.isdigit( b ) ||
+                character.islowercase( b ) ||
+                character.isuppercase( b ) ){
+                charline.append( (char) b );
+            } else {
+                charline.append( '.' );
+            }
+
+            if( ++count >= maxLen || i == size-1 ){
+                while( count++ < maxlen ){
+                hexline.append( " " );
+                }
+
+                hexline.append( ' ' );
+                hexline.append( charline.tostring() );
+
+                out.println( hexline.tostring() );
+  
+                hexline.setlength( 0 );
+                charline.setlength( 0 );
+                count = 0;
+            }
+        }
+    }
+
+    public void destroyapp( boolean unconditional ) {
+    }
+
+    public void startapp() {
+    }
+
+    public void pauseapp() {
+    }
+}

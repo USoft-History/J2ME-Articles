@@ -1,0 +1,266 @@
+13 апреля 2005 г. - Пишем игру для телефона. Часть 2
+
+
+
+Класс запуска игры и использование потоков
+
+
+Автор Carol Hamer
+Класс MIDlet 
+
+
+Настало время приступить к написанию настоящей игры. Если Вы скопируете код из этой и всех последующих секций, и откомпилируете их вместе, то получите нашу игру :"Tumbleweed".
+
+Класс MIDlet определяет несколько вещей, общих для всех MIDlet-ов (таких как кнопка старта и остановки) и не нуждающихся в изменении. Этот MIDlet класс (названный Jump) представляет собой слегка модифицированную копию класса MIDlet из предыдущего примера. Я хочу описать все сделаные дополнения, прежде чем приводить листинг класса. Помните, что MIDlet класс -это класс, который нужно упомянуть в jad файле MIDlet-а. 
+
+MIDlet предоставляет пользователю несколько комманд. Пользователь может либо перевести игру в режим паузы (если она уже не находится в этом режиме), либо в активный режим (из режима паузы), либо прерзапустить игру (если она закончилась). Таким образом, в данный момент времени доступна лишь однв команда: "Go", "Pause" или "Play Again". Поэтому в каждый момент добавляю одну из этих команд на экран и убираю две другие. Конечно, если того требует игра, Вы можете выводить на экран и несколько команд одновременно. Виртуальная Java Машина (JVM) устройства самостоятельно займется их размещением на экране. Например, по умолчанию эмулятор создает меню команд, когда число команд больше чем число доступных кнопок. Дополнительные аргументы  Command конструктора помогут устройству решить как присвоить кнопкам команды. Использование статичных кодов полей, таких как Command.BACK или Command.HELP, обеспечит присвоение стандартных команд наиболее часто используемым для этих целий клавишам. Выполнение приоритетных аргументов можт сильно меняться от устройства к устройству, но как правило команды с более высоким приоритетом будут более просто доступны пользователю.
+
+Я хочу также рассказать Вам,  что призойдет при вызове метода destroyApp(). Этот метод должен быть вызван перед завершением приложения, чтобы освободить используемые в игре ресурсы. Поскольку наше приложение очень простое, оно не использует ресурсы, которые необходимо освобождать; но оно занимает память, поэтому хорошим тоном будет присвоить ссылкам на объекты значение nill, поскольку любой используемый в игре объект может привести к потере памяти. Вызов notifyDestroyed() возвращает управление среде окружения устройства, но это не обязательно, поскольку JVM закрывается (если пользователь определенно не остановит Java функции и/или не выключит устройство). Так что особенные классы, которые были загружены вашем MIDlet-ом будут оставаться в памяти даже после завершения игры. Особенно важно помнить об этом, когда вы используете статичные названия, поскольку они как правило сохраняют свои значения от вызова к вызову и занимают память, даже когда не используются.
+
+********** Листинг Jump.java *********
+import javax.microedition.midlet.*;
+import javax.microedition.lcdui.*;
+
+/**
+ * Это малый класс игры.
+ *
+ * @автор Carol Hamer
+ */
+public class Jump extends MIDlet implements CommandListener {
+
+  //---------------------------------------------------------
+  //   поля объектов игры
+
+  /**
+   * Команда завершения игры.
+   */
+  private Command myExitCommand = new Command("Exit", Command.EXIT, 99);
+
+  /**
+   * Команда перехода из режима паузы в активный режим.
+   */
+  private Command myGoCommand = new Command("Go", Command.SCREEN, 1);
+
+  /**
+   * Команда перехода в режим паузы.
+   */
+  private Command myPauseCommand = new Command("Pause", Command.SCREEN, 1);
+
+  /**
+   * Команда начала новойигры.
+   */
+  private Command myNewCommand = new Command("Play Again", Command.SCREEN, 1);
+
+  /**
+   * Canvas на котором будет все рисоваться.
+   */
+  JumpCanvas myCanvas;
+
+  /**
+   * Тhread для ковбоя.
+   */
+  GameThread myGameThread;
+
+  //-----------------------------------------------------
+  //    Инициализация и изменение состояния игры
+
+  /**
+   * инициализация Canvas-а и команд.
+   */
+  public Jump() {
+    myCanvas = new JumpCanvas(this);
+    myCanvas.addCommand(myExitCommand);
+    myCanvas.addCommand(myGoCommand);
+    myCanvas.setCommandListener(this);
+  }
+
+  /**
+   * Включить команду Play again.
+   */
+  void setNewCommand() {
+    myCanvas.removeCommand(myPauseCommand);
+    myCanvas.removeCommand(myGoCommand);
+    myCanvas.addCommand(myNewCommand);
+  }
+
+  /**
+   * Включить команду go.
+   */
+  void setGoCommand() {
+    myCanvas.removeCommand(myPauseCommand);
+    myCanvas.removeCommand(myNewCommand);
+    myCanvas.addCommand(myGoCommand);
+  }
+
+  /**
+   * Включить командк pause.
+   */
+  void setPauseCommand() {
+    myCanvas.removeCommand(myNewCommand);
+    myCanvas.removeCommand(myGoCommand);
+    myCanvas.addCommand(myPauseCommand);
+  }
+
+  //----------------------------------------------------------------
+  //  Выполнение MIDlet-а
+
+  /**
+   * Запуск приложения.
+   */
+  public void startApp() throws MIDletStateChangeException {
+    myGameThread = new GameThread(myCanvas);
+    myCanvas.start();
+  }
+  
+  /**
+   * Остановка и уборка мусора.
+   */
+  public void destroyApp(boolean unconditional) 
+      throws MIDletStateChangeException {
+    myGameThread.requestStop();
+    myGameThread = null;
+    myCanvas = null;
+    System.gc();
+  }
+
+  /**
+   * Просьба перевесит thread в режим pause.
+   */
+  public void pauseApp() {
+    setGoCommand();
+    myGameThread.pause();
+  }
+
+  //----------------------------------------------------------------
+  //  Выполнение CommandListener
+
+  /*
+   * Вывод результата команды на экран
+   */
+  public void commandAction(Command c, Displayable s) {
+    if(c == myGoCommand) {
+      myCanvas.removeCommand(myGoCommand);
+      myCanvas.addCommand(myPauseCommand);
+      myGameThread.go();
+    } else if(c == myPauseCommand) {
+      myCanvas.removeCommand(myPauseCommand);
+      myCanvas.addCommand(myGoCommand);
+      myGameThread.go();
+    } else if(c == myNewCommand) {
+      myCanvas.removeCommand(myNewCommand);
+      myCanvas.addCommand(myGoCommand);
+      myGameThread.requestStop();
+      myGameThread = new GameThread(myCanvas);
+      System.gc();
+      myCanvas.reset();
+    } else if(c == myExitCommand) {
+      try {
+ destroyApp(false);
+ notifyDestroyed();
+      } catch (MIDletStateChangeException ex) {
+      }
+    }
+  }
+}
+
+
+ 
+Использование потоков. Класс Thread 
+
+Использование потоков должно быть очень близко любому разработчику игр. В этом примере метод run() содержит главный цикл игры в котором побуждает GameCanvas проверить какие клавиши нажаты, а затем обновляет графический объект согласно ситуации, пока игра не переведена в режим паузы или не остановлены.
+
+************ GameThread.java *************
+
+package net.frog_parrot.jump;
+
+/**
+ * Этот класс содержит основной игровой цикл игры.
+ * @Автор Carol Hamer
+ */
+public class GameThread extends Thread {
+
+  //---------------------------------------------------------
+  //   поля
+
+  /**
+   * Надо ли перевести основной поток в режим паузы.
+   */
+  boolean myShouldPause;
+
+  /**
+   * Надо ли остановить основной поток.
+   */
+  static boolean myShouldStop;
+
+  /**
+   * Запущен ли основной поток.
+   */
+  boolean myAlreadyStarted;
+
+  /**
+   * Указатель на  графический компонент
+   */
+  JumpCanvas myJumpCanvas;
+
+  //----------------------------------------------------------
+  //   Инициализация
+
+  /**
+   * стандартный конструктор.
+   */
+  GameThread(JumpCanvas canvas) {
+    myJumpCanvas = canvas;
+  }
+
+  //----------------------------------------------------------
+  //   Действия
+
+  /**
+   * Старт, пауза, выход из паузы.
+   */
+  void go() {
+    if(!myAlreadyStarted) {
+      myAlreadyStarted = true;
+      start();
+    } else {
+      myShouldPause = !myShouldPause;
+    }
+  }
+
+  /**
+   * пауза в игре.
+   */
+  void pause() {
+    myShouldPause = true;
+  }
+
+  /**
+   * остановка игры.
+   */
+  static void requestStop() {
+    myShouldStop = true;
+  }
+
+  /**
+   * pfgecr buhs.
+   */
+  public void run() {
+    // flush any keystrokes that occurred before the game started:
+1    myJumpCanvas.flushKeys();
+    myShouldStop = false;
+    myShouldPause = false;
+    while(true) {
+      if(myShouldStop) {
+ break;
+      }
+      if(!myShouldPause) {
+ myJumpCanvas.checkKeys();
+ myJumpCanvas.advance();
+      }
+    }
+  }
+}
+
+
+Перевод: Alex.
+Запрещается использовать любую часть данного текста без ссылки на источник:  http://www.mobilab.ru

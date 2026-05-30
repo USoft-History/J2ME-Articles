@@ -1,0 +1,150 @@
+Introducing XML Parsing with JSR 172 
+ 	
+[Back]
+
+The announcement of the Sony Ericsson W600 Walkman phone in June this year marks a significant milestone in Sony Ericsson's handset evolution by introducing support for JSR 172 (J2ME Web Services 1.0). 
+
+JSR 172 is the standard API for accessing Web Services from a J2ME-enabled mobile phone.
+
+An interesting aspect of the JSR 172 API is the introduction of XML packages within the handset's CLDC implementation. Traditionally, XML has been considered primarily suited to the desktop or server and unsuited for resource constrained environments such as mobile phones where CPU and memory are limited. JSR 172 standardizes J2ME XML parsing and in doing so, introduces a lightweight XML parser.
+
+JSR 172 implements a subset of JAXP 1.2 (Java API for XML Processing). Essentially it states that the SAX 2.0 (Simple API for XML) specification should be supported with the exception of SAX 1.0 interfaces, DOM 1.0 or 2.0 (Document Object Model) and XSLT (Extensible Stylesheet Language Transformation).
+
+This provides for a lightweight API that is suitable for use in a constrained environment. The package structure below mirrors JAXP 1.2 and incorporating XML parsing in your MIDlet is a straight-forward process.
+
+javax.xml.parsers 
+Contains the SAX parser, factory and exception classes.
+
+org.xml.sax
+The core SAX APIs including handlers and resolvers.
+
+org.xml.sax.helpers
+Various helper classes. 
+
+To try out XML Parsing, use the XML example and code sample below. Place a sample snippet of valid XML within the emulator's file system so that it can be discovered by the application. The Sony Ericsson J2ME SDK with phone emulators can be downloaded here>>
+
+<root drive>\J2ME_SDK\PC_Emulation\WTK2\appdb\SonyEricsson_W600\filesystem\root1
+
+phones.xml 
+
+<?xml version="1.0"?>
+<sonyericsson>
+<phone>
+<name>W600</name>
+<colour>Orange</colour>
+</phone>
+</sonyericsson>
+
+In order to perform the actual event based parsing, implement a trivial MIDlet and the DefaultHandler.
+
+import java.io.*;
+import org.xml.sax.*;
+import javax.xml.parsers.*;
+import javax.microedition.midlet.*;
+import javax.microedition.io.*;
+import javax.microedition.io.file.*;
+import javax.microedition.lcdui.*;
+
+public class HelloXML extends MIDlet
+{
+  public HelloXML() {}
+
+  protected void startApp() 
+  {
+    try 
+    {
+      SAXParserFactory factory = SAXParserFactory.newInstance();
+      SAXParser saxParser = factory.newSAXParser();
+
+      FileConnection fc = (FileConnection) Connector.open("file:///root1/phones.xml");
+      InputStream is = fc.openInputStream();
+      InputSource inputSource = new InputSource(is);
+      saxParser.parse(is,new BasicHandler(this));
+    }
+    catch(Exception ex) {}
+  }
+
+  protected void alert(String msg)
+  {
+    Display display = Display.getDisplay(this);
+    Form form = new Form("Hello XML !");
+    form.append(msg);
+    display.setCurrent(form);
+  }
+
+  protected void pauseApp() {}
+  protected void destroyApp(boolean bool) {} 
+}
+
+The handler processes the XML, creates a new Phone object and places this in a list. Worth noting is that white space, such as line breaks or tabs, is not ignored and therefore the character methods receives everything between tags.
+
+import org.xml.sax.*;
+import org.xml.sax.helpers.*;
+import javax.xml.parsers.*;
+import java.util.*;
+
+
+class BasicHandler extends DefaultHandler 
+{
+   private HelloXML helloXML;
+   private Vector phones = new Vector();  
+   private Stack tagStack = new Stack();
+
+    public BasicHandler (HelloXML midlet)
+    {
+ helloXML = midlet;
+    }
+
+  public void startDocument() throws SAXException {}
+
+  public void startElement(String uri, String localName, String qName, Attributes attributes) throws SAXException
+  {
+    if(qName.equals("phone"))
+    {
+      Phone phone = new Phone();
+      phones.addElement(phone); 
+    }
+
+    tagStack.push(qName);
+  } 
+    
+  public void characters(char[] ch, int start, int length) throws SAXException 
+  {
+    String chars = new String(ch, start, length).trim();
+
+    if(chars.length() > 0)
+    {
+      String qName = (String)tagStack.peek();
+
+      Phone currentPhone = (Phone)phones.lastElement();
+    
+      if (qName.equals("name")) 
+      {
+        currentPhone.setName(chars);
+      }
+      else if(qName.equals("colour")) 
+      {
+        currentPhone.setColour(chars);
+      }
+    }
+  }
+
+  public void endElement(String uri, String localName, String qName, Attributes attributes) throws SAXException
+  {
+    tagStack.pop(); 
+  }
+
+  public void endDocument() throws SAXException 
+  {
+      StringBuffer result = new StringBuffer();
+    for (int i=0; i<phones.size(); i++) 
+    {
+      Phone currentPhone = (Phone)phones.elementAt(i);
+      result.append(currentPhone.getName() + " is available in " + currentPhone.getColour() + "\n");
+    }
+
+    helloXML.alert(result.toString());
+  }
+}
+
+With JSR 172 you can create powerful MIDlets that offer similar functionality to their J2SE counterparts.

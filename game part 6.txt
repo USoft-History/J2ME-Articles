@@ -1,0 +1,449 @@
+25 апреля 2005 г. - Пишем игру для телефона. Часть 6
+
+
+
+TiledLayer. Скрипт компиляции и предварительной проверки
+
+Автор Carol Hamer 
+Класс Tumbleweed
+
+
+
+Ниже приведен код класса Tumbleweed.java:
+
+package net.frog_parrot.jump;
+
+import java.util.Random;
+
+import javax.microedition.lcdui.*;
+import javax.microedition.lcdui.game.*;
+
+/**
+ * Этот клас предоставляет кустики, которые должен перепрыгивать ковбой.
+ *
+ * @автор Carol Hamer
+ */
+public class Tumbleweed extends Sprite {
+
+  //---------------------------------------------------------
+  //   определение переменных
+
+  /**
+   * ширина кустиков.
+   */
+  static int WIDTH = 16;
+
+  /**
+   * Генератор случайных чисел.
+   */
+  Random myRandom = new Random();
+
+  /**
+   * был или небыл перепрыгнут кустик.
+   * Используется для подсчета очков.
+   */
+  boolean myJumpedOver;
+
+  /**
+   * должен ли кустик появиться слева.
+   */
+  boolean myLeft;
+
+  /**
+   * Y координата кустика.
+   */
+  int myY;
+
+  //---------------------------------------------------------
+  //   Инициализация
+
+  /**
+   * конструктор инициализирует рисунки и анимацию.
+   * Параметр left указывает должен ли кустик появляться слева.
+   */
+  public Tumbleweed(boolean left) throws Exception {
+    super(Image.createImage("/icons/tumbleweed.png"), 
+   WIDTH, WIDTH);
+    myY = JumpManager.DISP_HEIGHT - WIDTH - 2;
+    myLeft = left;
+    if(!myLeft) {
+      setTransform(TRANS_MIRROR);
+    }
+    myJumpedOver = false;
+    setVisible(false);
+  }
+
+  //---------------------------------------------------------
+  //   Графика
+
+  /**
+   *перевести кустик в его исходное неактивное состояние.
+   */
+  void reset() {
+    setVisible(false);
+    myJumpedOver = false;
+  }
+
+  /**
+   * Изменение изображения кустика соответственно кадру.
+   * Параметр left показывает двигается ли игрок влево
+   * Возвращает сколько очков надо начислить
+   */
+  int advance(Cowboy cowboy, int tickCount, boolean left,
+       int currentLeftBound, int currentRightBound) {
+    int retVal = 0;
+    // Если кустик оказался за пределами экрана,
+    // перевести его в невидимое состояние.
+    if((getRefPixelX() + WIDTH <= currentLeftBound) || 
+       (getRefPixelX() - WIDTH >= currentRightBound)) {
+      setVisible(false);
+    } 
+    // Если кустик находится в невидимом состоянии
+    // то у него есть шанс 1 к 100 вернуться в игру.
+    if(!isVisible()) {
+      int rand = getRandomInt(100);
+      if(rand == 3) {
+ // когда кустик возвращается в игру, мы 
+ // переводим его в активное состояние
+ myJumpedOver = false;
+ setVisible(true);
+ // устанавливаем новую позицию кустика
+ if(myLeft) {
+   setRefPixelPosition(currentRightBound, myY);
+   move(-1, 0);
+ } else {
+   setRefPixelPosition(currentLeftBound, myY);
+   move(1, 0);
+ }
+      }
+    } else {
+      // если кустик активен мы двигаем его и обновляем анимацию.
+      if(tickCount % 2 == 0) { // slow the animation down a little
+ nextFrame();
+      }
+      if(myLeft) {
+ move(-3, 0);
+ // Если ковбой перепрыгнул куст, мы увеличиваем его счет
+ // и устанавливаем myJumpedOver в true, чтобы при следующем 
+ // перепрыгивании этого куста очки не начислялись
+ if((! myJumpedOver) && 
+    (getRefPixelX() < cowboy.getRefPixelX())) {
+   myJumpedOver = true;
+   retVal = cowboy.increaseScoreThisJump();
+ }
+      } else {
+ move(3, 0);
+ if((! myJumpedOver) && 
+    (getRefPixelX() > cowboy.getRefPixelX() + Cowboy.WIDTH)) {
+   myJumpedOver = true;
+   retVal = cowboy.increaseScoreThisJump();
+ }
+      }
+    }
+    return(retVal);
+  }
+
+  /**
+   * Возвращает случайное целое число от 0 до 100
+   */
+  public int getRandomInt(int upper) {
+    int retVal = myRandom.nextInt() % upper;
+    if(retVal < 0) {
+      retVal += upper;
+    }
+    return(retVal);
+  }
+
+}
+
+
+Как было упомянуто ранее, класс TiledLayers очень похож на Sprite,
+за исключением того, что TiledLayer может состоять из сложной сетки,
+каждая ячейка которой имеет индивидуальный набор рисунков. Другим
+отличием является меньшая функциональность класса TiledLayer, который
+не поддерживает трансформации, и последовательности кадров.
+
+
+
+
+ЗАМЕЧАНИЕ! Нумерация внутри класса Sprite начинается с 0, а внутри TiledLayer
+с 1. Это обстоятельство создает небольшую путанницу (Когда я только начинал
+работать с классом Sprite, я испытывал определенные трудности, поскольку
+полагал, что нумерация этого класса соответствует нумерации в TiledLayer.).
+Однако с точки зрения системы все выглядит достаточно логично. В классе
+TiledLayer номер 0 означает пустую клетку (то есть если ячейка имеет значение
+0, то в ней ничего рисовать не надо). Sprite состоит всего из одной ячейки,
+так что если вы хотите сделать эту ячейку пустой, вам достаточно просто
+запретить отрисовку всего спрайта. Это можно сделать вызвав метод
+setVisible(false). Таким образом не требуется специального номера для
+обозначения пустого спрайта. Вы должны иметь ввиду эту несогласованность,
+поскольку в противном случае вы рискуете потратить много времени на поиск
+причины ошибок в анимации. Помимо этого отличия, в TiledLayer рисунки разделяются на кадры или тайлы(tile) абсолютно также как и для Sprite.
+
+Первым делом при создании TiledLayer-а надо решить сколько строк и столбцов
+будет иметь ваша сетка. Если вы хотите создать не прямоугольную сетку, то
+просто не присваивайте неиспользуемым ячейкам тайлы. Сетки по умолчанию являются пустыми. В нашем примере сетка представляет из себя строку. Число
+ячеек (столбцов) я вычисляю опираясь на ширину экрана.
+
+Во-первых Вы определяете сколько строк и столбцов будете использовать, вы
+можете заполнить каждую ячейку тайлом используя метод
+setCell(int col, int row, int tileIndex). Аргумент tileIndex был объяснен
+в разделе посвященном классу Sprite и в абзаце ЗАМЕЧАНИЕ. Если Вы хотите,
+чтобы клетка была заполнена анимированным рисунком,то вам необходимо создать
+анимированный тайл. Это можно сделать с помощью метода
+createAnimatedTile(int staticTileIndex), который возвращает номер созданного
+анимированного тайла. Вы можете создать любое количество анимированых тайлов,
+но помните, что каждый из них можно использовать в составных ячейках, если вы
+захотите чтобы ячейка отображала несколько анимаций одновременно. В нашем
+случае я создал один анимированый тайл и использовал его многократно,
+поскольку мне хотелось, чтобы вся трава волновалась синхронно. Ячейки задаются в классе Grass (код приводится ниже). Чтобы обновить анимацию и отобразить следующий кадр вам не нужно вызывать какой-то встроенный метод для определения последовательности кадров, как мы это делали для спрайтов. Вам надо просто задать кадры с помощью метода setAnimatedTile(int animatedTileIndex, int staticTileIndex). Мы задаем текущий кадр заданного анимированного тайла. Таким образом все ячейки, которые содержат анимированные тайлы соответствующие animatedTileIndex сменят активный 
+кадр на кадр соответствующий staticTileIndex. Для того чтобы упростить
+обновление анимации нужно просто добавить собственную функцию для
+последовательности списков(смотри метод Grass.advance(int tickCount) чтобы
+понять идею).
+
+package net.frog_parrot.jump;
+
+import javax.microedition.lcdui.*;
+import javax.microedition.lcdui.game.*;
+
+/**
+ * Этот класс рисует траву на заднем плане.
+ *
+ * @автор Carol Hamer
+ */
+public class Grass extends TiledLayer {
+
+  //---------------------------------------------------------
+  //    определяем переменные
+
+  /**
+   * ширина тайлов.
+   */
+  static int TILE_WIDTH = 20;
+
+  /**
+   * Порядок, в котором следует выводить кадры
+   */
+  static int[] FRAME_SEQUENCE = { 2, 3, 2, 4 };
+
+  /**
+   * Число квадратиков травы на экране
+   */
+  static int COLUMNS;
+
+  /**
+   * После скольких тайлов задний план повторяется
+   */
+  static int CYCLE = 5;
+
+  /**
+   * Y координата тайла.
+   */
+  static int TOP_Y;
+
+  //---------------------------------------------------------
+  //    
+
+  /**
+   * Номер текущего кадра.
+   */
+  int mySequenceIndex = 0;
+
+  /**
+   * Индекс, который используется в массиве статических тайлов для 
+   * обозначения анимированного.
+   */
+  int myAnimatedTileIndex;
+
+  //---------------------------------------------------------
+  //   gets / sets
+
+  /**
+   * Получение ширины экрана и установка правильного числа ячеек.
+   */
+  static int setColumns(int screenWidth) {
+    COLUMNS = ((screenWidth / 20) + 1)*3;
+    return(COLUMNS);
+  }
+
+  //---------------------------------------------------------
+  //   Инициализация
+
+  /**
+   * Инициализация рисунков и анимации.
+   */
+  public Grass() throws Exception {
+    super(setColumns(JumpCanvas.DISP_WIDTH), 1, 
+   Image.createImage("/icons/grass.png"), 
+   TILE_WIDTH, TILE_WIDTH);
+    TOP_Y = JumpManager.DISP_HEIGHT - TILE_WIDTH;
+    setPosition(0, TOP_Y);
+    myAnimatedTileIndex = createAnimatedTile(2);
+    for(int i = 0; i < COLUMNS; i++) {
+      if((i % CYCLE == 0) || (i % CYCLE == 2)) {
+ setCell(i, 0, myAnimatedTileIndex);
+      } else {
+ setCell(i, 0, 1);
+      }
+    }
+  }
+
+  //---------------------------------------------------------
+  //   графика
+
+  /**
+   * вернуть тайл в начальное состояние..
+   */
+  void reset() {
+    setPosition(-(TILE_WIDTH*CYCLE), TOP_Y);
+mySequenceIndex = 0;
+    setAnimatedTile(myAnimatedTileIndex, FRAME_SEQUENCE[mySequenceIndex]);
+  }
+
+  /**
+   * Изменить изображение..
+   */
+  void advance(int tickCount) {
+    if(tickCount % 2 == 0) { // slow the animation down a little
+      mySequenceIndex++;
+      mySequenceIndex %= 4;
+      setAnimatedTile(myAnimatedTileIndex, FRAME_SEQUENCE[mySequenceIndex]);
+    }
+  }
+
+}
+    
+
+
+ 
+Соединяем все вместе
+
+Итак,теперь у нас есть все необходимые классы и мы можем построить нашу
+игру. Классы должны быть откомпелированы, проверены и упакованы в jar архив.
+(Необходимость проверки является особенностью J2ME приложений, однако вам не
+стоит ее пугаться, поскольку она проводится автоматически с помощью
+специальных утилит.) Убедитесь в том, что все ресурсы были добавлены в jar
+файл. Мне понадобилось поместить файлы cowboy.png  и  grass.png в папку
+верхнего уровня icons в jar архиве, поскольку я конструирую
+Layer с помощью рисунков, созданных с помощью вызова метода:
+Image.createImage("/icons/grass.png"), итд. Также вам понадобится поместить
+в архив правильный файл манифеста MANIFEST.MF. Его код приводится ниже.
+
+MIDlet-1: Hello World, /icons/hello.png, net.frog_parrot.hello.Hello
+MIDlet-2: Tumbleweed, /icons/boot.png, net.frog_parrot.jump.Jump
+MMIDlet-Description: Example games for MIDP
+MIDlet-Name: Example Games
+MIDlet-Permissions: 
+MIDlet-Vendor: frog-parrot.net
+MIDlet-Version: 2.0
+MicroEdition-Configuration: CLDC-1.0
+MicroEdition-Profile: MIDP-2.0
+
+Помните, что для того чтобы поместить в jar архив свой манифест вместо
+автоматически создаваемого, необходимо при создании архива использовать
+опцию m.
+
+Итак, у вас есть jar файл, давайте создадим jad файл. Ниже приведен код
+файла jump.jad, который я использовал:
+
+MIDlet-1: Hello, /icons/hello.png, net.frog_parrot.hello.Hello
+MIDlet-2: Tumbleweed, /icons/boot.png, net.frog_parrot.jump.Jump
+MMIDlet-Description: Example games for MIDP
+MIDlet-Jar-URL: jump.jar
+MIDlet-Name: Example Games
+MIDlet-Permissions: 
+MIDlet-Vendor: frog-parrot.net
+MIDlet-Version: 2.0
+MicroEdition-Configuration: CLDC-1.0
+MicroEdition-Profile: MIDP-2.0
+MIDlet-Jar-Size: 17259
+
+
+Если вы создаете jad файл вручную, не забудьте убедиться в том, что
+MIDlet-Jar-Size задан верно. Также заметьте, что в jad задается
+иконка вашего приложения: /icons/boot.png. Этот файл также должен
+присутствовать в jar архиве.
+
+
+
+
+Как только jar и jad файлы созданы, Вы можете запустить программу. Я
+делаю это из коммандной строки с помощью скрипта runmidlet, который
+входит в состав WTK2.0.
+
+Желаю приятно провести время за созданной нами игрой!
+
+ПРИЛОЖЕНИЕ А: Скрипт 
+
+Запускать мидлет на эмуляторе с помощью коммандной стрроки очень просто.
+Сначала нужно перейти в bin каталог внутри папки где установлен WTK2.0.
+Оттуда вводим ./bin/emulator затем следует название jad файла запускаемого
+мидлета. В моем случае строка миеет следующий вид:
+
+./bin/emulator -Xdescriptor:/home/carol/j2me/book/ch02/bin/games.jad
+
+Опции эмулятора описаны в документации WTK2.0 в секции D.
+
+Приведенный ниже скрипт автоматически заполняет поле MIDlet-Jar-Size в jad
+файле приложения. Его можно исполльзовать после внесения изменений в jar
+архив.
+
+Этот скрипт будет корректно работать только в том случае, если дерево
+каталогов вашего приложения имеет вид: Внутри корневого каталога проекта
+созданы директории bin( содержит этот скрипт, файл манифеста и jad файл),
+tempclasses (можно оставить пустой), classes (содержит подкаталог images со
+всеми используемыми рисунками) и scr (здесь содержатся исходные коды
+приложения).
+
+# Этот скрипт производит компиляцию и 
+# предварительную проверку исходного кода.
+
+# устанавливаем путь к файлу javac на вашем компьютере:
+JAVA4_HOME=/usr/java/j2sdk1.4.0_01/bin
+# Устанавливаем путь, куда установлен WTK2.0
+WTK2_HOME=../../../../WTK2.0
+
+echo "clear directories"
+# Удаляем старые файлы
+rm ../tmpclasses/net/frog_parrot/hello/*.class
+rm ../classes/net/frog_parrot/hello/*.class
+rm ../tmpclasses/net/frog_parrot/jump/*.class
+rm ../classes/net/frog_parrot/jump/*.class
+
+echo "Compiling source files"
+
+$JAVA4_HOME/javac -bootclasspath $WTK2_HOME/lib/midpapi.zip -
+d ../tmpclasses -classpath ../tmpclasses ../src/net/frog_parrot/hello/*.java 
+../src/net/frog_parrot/jump/*.java
+
+echo "Preverifying class files"
+
+$WTK2_HOME/bin/preverify -classpath $WTK2_HOME/lib/midpapi.zip:
+../tmpclasses -d ../classes ../tmpclasses
+
+echo "Jarring preverified class files"
+$JAVA4_HOME/jar cmf MANIFEST.MF jump.jar -C ../classes .
+
+echo "Updating JAR size info in JAD file..."
+
+NB=`wc -l jump.jad | awk '{print $1}'`
+head --lines=$(($NB-1)) jump.jad > jump.jad1
+echo "MIDlet-Jar-Size:" `stat -c '%s' jump.jar`>> jump.jad1
+cp jump.jad1 jump.jad
+
+
+Вот и все что я хотел вам рассказать о скриптах. Обратите внимание, что
+вывод всей служебной информации ведется в файл /dev/null. Если Вы хотите
+видеть все эти сообщения на экране, просто удалите >/dev/null из конца
+скрипта.
+ПРИЛОЖЕНИЕ Б: Рисунки и Gimp
+
+
+Если вы не знаете? где взять рисунки для вашего приложения, нарисуйте их сами. При этом я рекомендую использовать бесплатную программу Gimp. Ее можно
+скачать здесь: http://www.gimp.org/download.html.  Программа очень удобна.
+В частности с ее помощью можно создавать рисунки с прозрачным задним планом. В интернете вы также без труда найдете русскую документацию для этой программы.
+
+
+Перевод: Alex.
+Запрещается использовать любую часть данного текста без ссылки на источник: http://www.mobilab.ru

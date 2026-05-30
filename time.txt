@@ -1,0 +1,339 @@
+19 марта 2005 г. - Работа с датой и временем
+
+
+
+
+Автор оригинала Eric Giguere.
+
+Разбор и вывод на экран даты и времени как правило вызывает затруднения. В J2SE есть несколько классов, облегчающих работу со временем.  Я говорю о классах java.util.Calendar, java.util.Date, java.util.TimeZone и java.text.DateFormat. Для сравнения, профиль MIDP позволяет использовать  только  классы Calendar, Date и TimeZone.  Класс DateFormat не поддерживается ни в какой форме.  Возникает закономерный вопрос,  как управлять выводом на экран  даты и времени.
+
+Ответ кроется в классе javax.microedition.lcdui.DateField, который представляет собой часть высокоуровневого API интерфейса пользователя. DateField это компонент интерактивного пользовательского интерфейса, который позволяет отображать дату, время или все сразу.  Он также  позволяет проводить их редактирование. DateField представляет собой расширение класса Item. Это означает, что этот компонент можно располагать на форме. Таким образом, первым шагом для использовании этого класса будет создание формы и расположение на ней DateField.
+
+ Form f = new Form( "A Form" );
+ f.append( df );
+
+Как и любой потомок класса Item, DateField выводится на экран только когда его форма активна. Перевести форму в активное состояние можно вызвав метод Displat.setCurrent.
+
+Класс DateField  определяет два конструктора:
+
+    public DateField( String label, int mode );
+    public DateField( String label, int mode, java.util.TimeZone zone );
+
+Собственно, для отображения даты и времени с помощью DateFields надо задать используемую временную зону. Двухаргументный конструктор использует установленную в телефоне по умолчанию временную зону. Трехаргументный конструктор позволяет вам задать другую зону. Вы не сможете изменить отображаемую временную зону без создание нового DateField.
+
+Поговорим об оставшихся аргументах. Как вы видете, они идентичны в обоих конструкторах. Первый аргумент задает подпись рядом с полем даты, используйте null если не хотите ее использовать. Второй аргумент определяет стиль поля. Всего доступно три варианта:
+
+    public static final int DATE = 1;
+    public static final int TIME = 2;
+    public static final int DATE_TIME = 3;
+
+Стиль определяет, что должно выводиться в поле: только дата, только время или все вместе. Вы можете изменить стиль вывода в любое время, вызвав метод setInputMode.
+
+Когда вы создаете  новый экземпляр DateField, то не имеете возможность задать дату или время. Следующий код выводит неинициализированную дату.
+
+    Display display = ....; // initialized elsewhere
+    Form f = new Form( "An Empty Date" );
+    DateField df = new DateField( "Date:", 
+                                  DateField.DATE );
+    f.append( df );
+    display.setCurrent( f );
+
+Чтобы инициализировать дату или время, вызовите метод setDate  и передайте инициализированному объекту java.util.Date исправленное значение.
+
+    Calendar c = Calendar.getInstance();
+    c.set( Calendar.MONTH, Calendar.OCTOBER );
+    c.set( Calendar.DAY_OF_MONTH, 18 );
+    c.set( Calendar.YEAR, 1996 );
+    c.set( Calendar.HOUR_OF_DAY, 16 );
+    c.set( Calendar.MINUTE, 39 );
+    c.set( Calendar.SECOND, 45 );
+    c.set( Calendar.MILLISECOND, 0 );
+    
+    Date moment = c.getTime();
+    DateField df = new DateField( null, 
+                                 DateField.DATE_TIME );
+    df.setTime( moment );
+
+Объект Date возвращает число миллисекунд прошедших с полночи  1 января 1970 года до текущего момента. Ниже показано, как используя Calendar создать Date.
+
+Заметьте, что DateField в стиле TIME требует порцию даты чтобы определить 1 января 1970. Ниже приводятся два полезных метода для очистки порции даты и слияния двух Date объектов в единый объект.
+
+
+    public static Date clearDate( Date d ){
+        Calendar c = Calendar.getInstance();
+        c.setTime( d );
+        c.set( Calendar.MONTH, Calendar.JANUARY );
+        c.set( Calendar.DAY_OF_MONTH, 1 );
+        c.set( Calendar.YEAR, 1970 );
+        return c.getTime();
+    }
+
+    public static Date combineDateTime( 
+                                Date date, Date time ){
+        Calendar cd = Calendar.getInstance();
+        Calendar ct = Calendar.getInstance();
+
+        cd.setTime( date );
+        ct.setTime( time );
+
+        ct.set( Calendar.MONTH, 
+                            cd.get( Calendar.MONTH ) );
+        ct.set( Calendar.DAY_OF_MONTH, 
+                     cd.get( Calendar.DAY_OF_MONTH ) );
+        ct.set( Calendar.YEAR, 
+                             cd.get( Calendar.YEAR ) );
+
+        return ct.getTime();
+    }
+
+
+Когда Вы манипулируете с датой при помощи класса Calendadr, Date сохраняет свое значение.
+
+После того как DateField отображен, система позволяет пользователю редактировать время в соответствии со стилем. Если Вам необходимо получить новое значение даты или времени, вызовите метод getDate:
+
+    DateField df = ....;
+    Date editedDate = df.getDate();
+
+Ниже приведен простой MIDlet, который позволяет Вам видеть и редактировать дату и время, используя все три стиля.                                            
+
+
+import java.util.*;
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+
+/**
+ * Демонстрация редактирования даты/времени при помощи класса
+ * DateField.
+ */
+
+public class DateFieldTest extends MIDlet {
+
+    private Display display;
+    
+    // Определяем объекты меню.
+  
+    private Command exitCommand =
+             new Command( "Exit", Command.EXIT, 1 ); 
+    private Command okCommand =
+             new Command( "OK", Command.OK, 1 );
+    private Command cancelCommand =
+             new Command( 
+                         "Cancel", Command.CANCEL, 1 );
+
+    public DateFieldTest(){
+    }
+
+    protected void destroyApp( boolean unconditional )
+                    throws MIDletStateChangeException {
+        exitMIDlet();
+    }
+
+    protected void pauseApp(){
+    }
+ 
+    protected void startApp()
+                    throws MIDletStateChangeException {
+        if( display == null ){ // first time called...
+            initMIDlet();
+        }
+    }
+
+    private void initMIDlet(){
+        display = Display.getDisplay( this );
+        testList = new TestList();
+        display.setCurrent( testList );
+    }
+
+    public void exitMIDlet(){
+        notifyDestroyed();
+    }
+ 
+    //Возвращаем дату и время с 1 января 1970 года
+
+    public static Date clearDate( Date d ){
+        Calendar c = Calendar.getInstance();
+        c.setTime( d );
+        c.set( Calendar.MONTH, Calendar.JANUARY );
+        c.set( Calendar.DAY_OF_MONTH, 1 );
+        c.set( Calendar.YEAR, 1970 );
+        return c.getTime();
+    }
+
+    // Совмещаем дату и время.
+
+    public static Date combineDateTime( Date date, 
+                                        Date time ){
+        Calendar cd = Calendar.getInstance();
+        Calendar ct = Calendar.getInstance();
+
+        cd.setTime( date );
+        ct.setTime( time );
+
+        ct.set( Calendar.MONTH, 
+              cd.get( Calendar.MONTH ) );
+        ct.set( Calendar.DAY_OF_MONTH,  
+                   cd.get( Calendar.DAY_OF_MONTH ) );
+        ct.set( Calendar.YEAR, 
+                   cd.get( Calendar.YEAR ) );
+
+        return ct.getTime();
+    }
+    
+    // Определяем используемый стиль даты
+
+    static final String[] testLabels = {
+        "Current date",
+        "Current time",
+        "Current date/time",
+        "Edit date",
+        "Edit time",
+        "Edit date/time",
+    };
+
+    private TestList testList;
+    private Date     editDate;
+
+    //
+    // Выводим список действий
+    //
+
+    class TestList extends List
+                   implements CommandListener {
+        public TestList(){
+            super( "DateField Tests", IMPLICIT,
+                   testLabels, null );
+            addCommand( exitCommand );
+            setCommandListener( this );
+        }
+
+        public void commandAction( Command c,
+                                   Displayable d ){
+            if( c == exitCommand ){
+                exitMIDlet();
+            } else if( c == List.SELECT_COMMAND ){
+             
+                // Figure out which date to display
+                // and what the input mode is
+
+                int     which = getSelectedIndex();
+                String  label = getString( which );
+                int     mode = ( which % 3 ) + 1;
+                boolean save = ( which > 2 );
+
+                display.setCurrent(
+                   new Edit( save, label, mode ) );
+            }
+        }
+    }
+
+    //
+    // Редактирование даты/времени и сохранение результата.
+    //
+
+    class Edit extends Form
+               implements CommandListener {
+
+        public Edit( boolean save, String label,
+                     int mode ){
+
+            super( label );
+            this.save = save;
+
+            Date d = editDate;
+
+            if( !save ){
+                d = new Date();
+            }
+
+            dateField = new DateField( null, mode );
+            append( dateField );
+
+            if( d != null ){
+                if( mode == DateField.TIME ){
+                    d = clearDate( d );
+                }
+
+                dateField.setDate( d );
+            }
+
+            addCommand( okCommand );
+
+            if( save ){
+                addCommand( cancelCommand );
+            }
+
+            setCommandListener( this );
+        }
+
+        public void commandAction( Command c,
+                                   Displayable d ){
+            Alert alert = null;
+            Date  date = dateField.getDate();
+
+            if( 
+              save && date != null && c 
+                == okCommand ){
+                if( editDate != null ){
+                   int mode = dateField.getInputMode();
+                    if( mode == DateField.DATE ){
+                        editDate = combineDateTime( 
+                                      date, editDate );
+                    } else if( 
+                              mode == DateField.TIME ){
+                        editDate = combineDateTime( 
+                                      editDate, date );
+                    } else {
+                        editDate = date;
+                    }
+                } else {
+                    editDate = date;
+                }
+
+                Calendar cal = Calendar.getInstance();
+                cal.setTime( editDate );
+
+                alert = new Alert( "New date/time" );
+                alert.setString( 
+                 "The saved date/time is now " + cal );
+                alert.setTimeout( Alert.FOREVER );
+            }
+
+            if( alert != null ){
+                display.setCurrent( alert, testList );
+            } else {
+                display.setCurrent( testList );
+            }
+        }
+
+        private DateField dateField;
+        private boolean   save;
+    }
+}
+
+
+-----------
+
+public class MultiAlert extends MIDlet {
+
+    Display      display;
+    Command      exitCommand = new Command( "Exit", Command.EXIT,
+                                                             1 );
+        public MultiAlert() {
+        display = Display.getDisplay( this );
+        router = new AlertRouter( display );
+
+      timer1.schedule( new AlertTrigger( "Alert 1", 
+                             "This is alert #1" ), 5000, 10000 );
+        timer2.schedule( new AlertTrigger( "Alert 2", 
+                              "This is alert #2" ), 5000, 7000 );
+        timer3.schedule( new AlertTrigger( "Alert 3", 
+                              "This is alert #3" ), 5000, 9000 );
+    } 
+
+
+__________________________________________________
+Перевод: Arix
+
+Запрещается использовать любую часть данного текста без ссылки на источник: 
+
+http://www.mobilab.ru

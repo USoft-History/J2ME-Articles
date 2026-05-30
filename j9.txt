@@ -1,0 +1,72 @@
+12 июня 2007 - Потоковое воспроизведение звука из интернета средствами J2ME
+
+
+
+В этой статье рассказывается о том как можно загрузить и воспроизвести файл с web сайта средствами J2ME на Java Platform 6 телефонах (Sony Ericsson W550 или W900 Walkman). Музыку можно загрузить с помощью real-time потокового протокола rtsp, но мы будем использовать input stream. Обратите внимание, программа требует поддержки телефоном расширений JSR-75 и JSR-135. 
+
+Для решения поставленной задачи необходимо прежде всего открыть InputStream для музыкального файла на web сервере. Затем нужно сохранять байты прочитанные из InputStream в файл на телефоне. Поскольку телефоны поддерживают прогрессивное воспроизведение музыкальных файлов из файловой системы, мы можем запустить воспроизведение файла прежде чем он загрузится полностью. 
+
+Необходимо подробней остановиться на двух моментах: 
+Скорость загрузки. Прежде чем начать воспроизведение необходимо получить в буфер данные с сервера. 
+Время воспроизведения. Необходимо следить за временем воспроизведения. Если загрузка происходит медленнее чем воспроизведение, и все данные из буфера будут проиграны, понадобится новый буфер и возможность установки правильного времени. 
+
+Создадим новый файл, а затем откроем для него output stream. 
+
+fConn = (FileConnection)Connector.open("file:///c:/other/mymusic.mp3");
+fConn.create();
+outputStream = fConn.openOutputStream();
+
+Теперь, когда мы начали сохранять байты из входящего потока мы можем записать их в исходящий поток. 
+
+HttpConnection conn = (HttpConnection)Connector.open(url);
+InputStream is = conn.openInputStream();
+
+int chunkSize = 512;
+byte []data = new byte[chunkSize];
+int length = 0;
+do{
+    length = is.read(data, 0, chunkSize);
+    progress += length;
+
+    if(length != -1){
+        outputStream.write(data, 0, length);
+    } 
+
+}while(length != -1);
+
+После создания буфера загрузки, можно начать воспроизведение музыки. 
+
+final String file = "file:///c:/other/mymusic.mp3";
+player = Manager.createPlayer(file);
+player.addPlayerListener(this);
+player.realize();
+player.setMediaTime(startTime);
+
+Не забудьте обновить время воспроизведения если возникнет необходимость в остановке и повторном запуске воспроизведения. 
+
+startTime = player.getMediaTime();
+
+Для воспроизведения музыки используется интерфейс PlayerListener, поэтому нужно следить за состоянием файла с музыкой. Для этого будем использовать метод playerUpdate(). 
+
+public void playerUpdate(javax.microedition.media.Player player, String str, Object obj) {
+    if(str == PlayerListener.END_OF_MEDIA){
+        playerBufferAdd();
+        player.close();
+    }
+}
+
+В playerUpdate мы проверяем, достиг ли плеер конца файла, то есть конца буфера загрузки. Если конец достигнут, мы должны создать новый буфер, и закрыть плеер. Новый плеер можно создать только после создания нового буфера.
+Замечание
+
+Некоторые телефоны поддерживают протокол rts. Телефоны с Java Platform 7 (SE k610/K800) поддерживают прогрессивную загрузку из сети. В K610 можно запустить воспроизведение mp3 еще до того как он полностью загружен. 
+
+final String file = "http://aserver//mymp3.mp3";
+player = Manager.createPlayer(file);
+player.start(); 
+
+Или с помощью rts протокола
+
+final String file = "rtsp://streamingserver//music.3gp";
+player = Manager.createPlayer(file);
+player.start();
+

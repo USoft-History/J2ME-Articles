@@ -1,0 +1,209 @@
+12 апреля 2005 г. - Реализация HTTP соединений в MIDP. Пример создания чувствительного пользовательского интерфейса
+
+
+
+Все пользовательские интерфейсы, не зависимо от их структуры и назначения, построены на основе нескольких базовых концепций. Одной из них является то, что интерфейс всегда должен быть чувствителен к действиям пользователя. Другими словами, если пользователь нажимает кнопку, двигает джойстик или осуществляет какую-нибудь другую входную операцию, интерфейс должен как можно быстрее отреагировать на нее. Обычно приемлемым временем отклика является одна десятая секунды. Если задержка больше, пользователь это обязательно почувствует, и у него будет складываться впечатление, что приложение подтормаживает.
+
+Таким образом, приложение не должно выполнять в ответ на действие пользователя операции, длительность выполнения которых превышает десятую долю секунды. При первом запуске приложения, подсистема пользовательского интерфейса создает поток, который обрабатывает входные события. Этот поток, обычно называют потоком событий. Именно в нем происходит вызов методов обработки в ответ на событие. Например, если текущей экран представлен объектом canvas, то его метод keyPressed вызывается всякий раз, когда нажата клавиша. Поток событий не может обрабатывать следующие события до тех пор, пока метод не завершит свою работу. Если метод, обрабатывающий событие будет долго выполняться, то фактически пользовательский интерфейс будет блокирован и не сможет обрабатывать другие события. Чем медленней работает метод, тем более тормозным кажется интерфейс. (Здесь приводилась несколько упрощенная схема обработки событий, но она вполне пригодна для наших целей.)
+
+Существует и еще одна причина, по которой не стоит вызывать длинные методы обработки из потока событий. Вы никак не сможете прервать выполнение метода обработки, поскольку пользовательский интерфейс был блокирован при начале его выполнения, и не реагирует на ваши приказы.
+
+Давайте подумаем, как можно сделать чувствительный пользовательский интерфейс и создать механизм отмены выполняемой обработки события. Все очень просто: нужно использовать другой поток, будем называть его рабочим, для выполнения обработки событий. Таким образом, долгие операции будут выполняться в рабочем потоке и ничто не мешает потоку событий обрабатывать другие события.
+
+Рассмотрим все это на конкретном примере: осуществим HTTP соединение, используя класс HttpConnection, входящий в состав профиля MIDP. Даже простое подключение к удаленному серверу, занимает несколько секунд. Это связано с тем, что радио канал, которые используют мобильные телефоны довольно медленный. Добавьте сюда же время обработки сервером вашего запроса, пересылку ответа и обработку полученной информации в телефоне. Получается никак не меньше десяти секунд. Резонно при выполнении таких операций, вывести на экран соответствующее статическое сообщение, и позволить пользователю прервать соединение с сервером, разместив на экране кнопку "Отмена". В приведенном ниже примере показан класс, который создает отдельный поток для создания и обработки HTTP соединения. Класс также выводит на экран служебную информацию о состоянии соединения и позволяет прервать соединение. С помощью этого приложения Вы можете увидеть HTTP заголовок и ответ Web сервера.
+
+-----
+import java.io.*;
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+import javax.microedition.io.*;
+
+// Простой класс, который присоединяется к серверу
+// с указанным URL и выводит на экран заголовок и код
+// его ответа. Ниже показано как использовать отдельный
+// рабочий поток, для осуществления HTTP соединения.
+
+public class HttpLogger extends MIDlet {
+
+    private Display display;
+
+    private Command exitCommand =
+               new Command( "Выход", Command.EXIT, 1 );
+    private Command okCommand =
+               new Command( "OK", Command.OK, 1 );
+    private Command cancelCommand =
+               new Command( "Отмена", Command.CANCEL, 1 );
+
+    private URLEntry mainForm;
+
+
+    public HttpLogger(){
+    }
+
+    protected void destroyApp( boolean unconditional )
+                      throws MIDletStateChangeException {
+        exitMIDlet();
+    }
+
+    protected void pauseApp(){
+    }
+
+    protected void startApp()
+                      throws MIDletStateChangeException {
+        if( display == null ){
+            initMIDlet();
+        }
+    }
+
+    private void initMIDlet(){
+        display = Display.getDisplay( this );
+        mainForm = new URLEntry();
+        display.setCurrent( mainForm );
+    }
+
+    public void exitMIDlet(){
+        notifyDestroyed();
+    }
+
+    // Сервисная подпрограмма для отображения исключительных ситуаций.
+ 
+    void displayError( Throwable e, Displayable next ){
+        Alert a = new Alert( "Ошибка" );
+        a.setString( e.toString() );
+        a.setTimeout( Alert.FOREVER );
+        display.setCurrent( a, next );
+    }
+
+    // Получаем от пользователя URL адрес сервера.
+
+    class URLEntry extends TextBox
+                   implements CommandListener {
+
+        URLEntry(){
+            super( "Введите URL:", "java.sun.com",
+                   100, 0 );
+            addCommand( exitCommand );
+            addCommand( okCommand );
+            setCommandListener( this );
+        }
+
+        public void commandAction( Command c,
+                                   Displayable d ){
+            if( c == exitCommand ){
+                exitMIDlet();
+            } else if( c == okCommand ){
+                try {
+                    HttpConnection conn =
+                      (HttpConnection)
+                      Connector.open( "http://" +
+                                      getString() );
+                    display.setCurrent(
+                          new Logger( this, conn ) );
+                }
+                catch( IOException e ){
+                    displayError( e, this );
+                }
+            }
+        }
+    }
+
+    // Простая форма, содержащая текстовую строку.
+    // Строка обновляется при получении сообщения состояния.
+    // Создается выполняемый в фоновом режиме поток, который
+    // фактически выполняет HTTP соединение.
+    // Выводит команду "Отмена" для завершения соединения.
+
+
+    class Logger extends Form
+                 implements Runnable, CommandListener {
+        private Displayable    next;
+        private HttpConnection conn;
+        private StringItem     text =
+                     new StringItem( null, "" );
+
+        Logger( Displayable next,
+                HttpConnection conn ){
+            super( "HTTP Log" );
+
+            this.next = next;
+            this.conn = conn;
+
+            addCommand( cancelCommand );
+            setCommandListener( this );
+
+            append( text );
+
+            Thread t = new Thread( this );
+            t.start();
+        }
+
+
+        // Обработка команд. Гасим экран и ожидаем завершения соединения.
+
+        public void commandAction( Command c,
+                                   Displayable d ){
+                    display.setCurrent( next );
+
+            try {
+                conn.close();
+            }
+            catch( IOException e ){
+                displayError( e, next );
+            }
+        }
+
+        // Выполняем соединение в отдельном потоке.
+
+        public void run(){
+            update( "Connecting to " + conn.getURL() );
+
+            try {
+                int rc = conn.getResponseCode();
+                update( "Response code: " + rc );
+                update( "Response message: " +
+                         conn.getResponseMessage() );
+
+                String key;
+
+                for( int i = 0;
+                     ( key =
+                       conn.getHeaderFieldKey( i ) )
+                                             != null;
+                     ++i ){
+                    update( key + ": " +
+                            conn.getHeaderField( i ) );
+                }
+            }
+            catch( IOException e ){
+                update( "Caught exception: " +
+                        e.toString() );
+            }
+
+            removeCommand( cancelCommand );
+            addCommand( okCommand );
+        }
+
+ // Обновляем строку состояния. Делаем это, только если экран видим.
+
+        void update( String line ){
+            if( display.getCurrent() != this ) return;
+
+            String       old = text.getText();
+            StringBuffer buf = new StringBuffer();
+
+            buf.append( old );
+            if( old.length() > 0 ){
+                buf.append( '\n' );
+            }
+
+            buf.append( line );
+            text.setText( buf.toString() );
+        }
+    }
+}
+-----
+
+Обратите внимание на то, что приведенный выше код похож на оригинальные AWT классы, но в отличии от Swing, MIDP классы пользовательского интерфейса используют безопасные потоки.  Поэтому вызов методов из различных потоков, как это было сделано в примере, является вполне законным и безопасным.
+
+Автор: Eric Giguere http://www.ericgiguere.com/
+Перевод: Alex

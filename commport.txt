@@ -1,0 +1,104 @@
+14 октября 2006 г. - Как в J2ME использовать последовательный(Com), инфракрасный (IrDA) или USB порт
+
+
+
+С помощью портов Вы можете организовать взаимодействие телефона с другими устройствами, например с GPS приемником, или настольным компьютером. 
+
+Работа с последовательным, инфракрасным и USB портом в J2ME осуществляется через интерфейс CommConnection (в MIDP 2.0) или StreamConnection (MIDP 1.0). Эти интерфейсы являются частью GCF API. (Более полную информацию о GCF можно найти в статье Работа с сетью в J2ME - Generic Connection Framework (GCF) API. Сокеты, дейтаграммы, HTTP соединение). Я не буду приводить здесь полную иерархию GCF, ограничусь лишь интересующей нас веткой: 
+
+Connection<-InputConnection, OutputConnection<-StreamConnection<-CommConnection 
+
+Итак, прежде чем передавать и получать данные, необходимо установить соединение. Для этого нужно воспользоваться методом 
+
+Connection .open(String url, int mode, boolean timeouts). 
+
+Первый параметр определяет тип необходимого Вам соединения и состоит из трех частей: схемы, адреса и дополнительных параметров. В нашем случае необходимо использовать url вида: 
+
+comm:<идентификатор порта>[;<дополнительный параметр>=<значение>] 
+
+Идентификатор порта может принимать следующие значения (#-это номер порта, например 0): 
+COM# - последовательный порт RS-232/USB 
+IR# - инфракрасный IrDA IRCOMM порт 
+USB# - USB порт 
+
+В качестве дополнительных параметров используются: Параметр	Значение по умолчанию	Возможные значения	Описание
+baudrate	зависит от телефона	Строка цифр Скорость порта.
+bitsperchar	8	7, 8	Число битов, определяющих символ.
+stopbits	1	1, 2	Число стоп-битов на символ.
+parity	none	“odd”, “even”, “none” 	Четность.
+blocking	on	“on”, “off”	Если on, ожидает полного прочтения буфера.
+autocts	on	“on”, “off”	Если on, перед записью ожидает CTS. 
+autorts	on	“on”, “off”	Если on, включает RTS при неполном входном буфере. Если off, всегда используется RTS.
+
+
+Второй параметр определяет режим работы с портом и может принимать одно из значений: READ, WRITE или READ_WRITE. 
+
+Третий параметр определяет, нужно ли генерировать исключение в случае превышения интервала ожидания. 
+
+Ниже приведен пример иллюстрирующий создание нового соединения: 
+
+(CommConnection)Connector.open("comm:COM0;baudrate=19200", Connector.READ_WRITE, false); 
+
+
+Ниже приведен пример, в котором осуществляется поиск доступных портов устройства: 
+
+String port; 
+ String ports = System.getProperty("microedition.commports"); 
+  int comma = ports.indexOf(','); 
+ if (comma > 0) { 
+     // Берем первый из доступных портов. 
+     port = ports.substring(0, comma); 
+ } else { 
+     // Доступен один порт. 
+     port =ports; 
+ }
+
+Ниже показано, как можно открыть порт и провести операции чтения/записи: 
+
+//Aey midp2.0 
+CommConnection commConn = 
+(CommConnection)Connector.open("comm:COM0;baudrate=115200", Connector.READ_WRITE, 
+true); 
+    InputStream iStream = commConn.openInputStream(); 
+    OutputStream oStream = commConn.openOutputStream(); 
+    String sMessage = "send";      //Сообщение
+oStream.write(sMessage.getBytes());      //Отправляем сообщение
+
+Thread tRead = new Thread() {      //Nicaaai Создаем поток для чтения сообщений
+    public void run() {                //За писываем полученное сообщение в sb
+            while (true) { 
+                StringBuffer sb = new StringBuffer(); 
+                while(true) { 
+                    int c = iStream.read(); 
+                    if(c != '\r') { 
+                        sb.append((char)c); 
+                    } 
+                    else 
+                        break; 
+                } 
+                try { 
+                    sleep(1000); 
+                } 
+                catch (InterruptedException e) {} 
+            } 
+        } 
+    }; 
+tRead.start();
+
+В случае, если устройство не поддерживает интерфейс CommConnection, вместо него можно попробовать использовать StreamConnection: 
+
+StreamConnection commConn = (StreamConnection)Connector.open("comm:COM0";baudrate=115200"); 
+
+Рекомендуется вынести все операции чтения и записи в отдельный поток. Это позволит избежать блокировки приложения при передаче/приеме данных. 
+
+Хотя внешне работа с портом выглядит очень просто, есть несколько особенностей, которые необходимо учитывать. 
+Это звучит немного дико, но многие телефоны отказываются работать, если Вы не вовремя подключите Data кабель. Большинство телефонов (проверенно на Моторолах) требуют, чтобы кабель вставлялся в телефон только ПОСЛЕ создания соединения (выполнения команды Connector.open()). 
+Некоторые телефоны (например, Motorola T720i) используют собственные API для работы с портом. Указанная модель при установке соединения ждет от внешнего устройства набора инициализирующих Hayes AT Modem Commands команд. 
+В данный момент времени с данным портом может работать только одно приложение. 
+CommConnection не позволяет параллельно использовать два соединения. 
+Режим доступа к портам определяется используемой в телефоне моделью защиты. В случае если приложение не имеет права работать с портом, возникает исключение java.lang.SecurityException. 
+Для получения информации о доступных портах рекомендуется использовать метод System.getProperty. Параметр метода зависит от модели телефона, например: System.getProperty("serialport.name") System.getProperty("serial.maxbaudrate") System.getProperty("microedition.commports") Источник 
+
+В основе статьи лежат работы «Using Serial on Motorola J2ME handsets» by Motocoder staff .
+MID Profile Specification - WTK2.0\docs\api\midp\javax\microedition\io\CommConnection.html .
+Перевод: aRix

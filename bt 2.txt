@@ -1,0 +1,325 @@
+18 ноября 2005г. - Использование Bluetooth в J2ME приложениях. (JSR-82) - Часть 2. Обзор Connection и Device Management API
+
+
+Обзор Connection API
+
+С помощью Java API для Bluetooth, Вы можете создать Bluetooth соединение, использующее Serial Port Profile (RFCOMM), L2CAP и OBEX. OBEX поддерживается не всеми устройствами (в частности не поддерживается P900/P908), поэтому оно не будет нами рассматриваться. 
+Типы Bluetooth соединения
+
+Java API для Bluetooth основан на CLDC 1.0 Generic Connection Framework (GCF). На следующем рисунке показаны отношения между GCF и Bluetooth API. GCF Компоненты Java API для Bluetooth помещены в синие квадраты. 
+
+
+Основой подключения является класс Connector. Для сохранения преемственности RFCOMM и OBEX, Bluetooth API не затрагивает существующие в GCF типы StreamConnection и StreamConnectionNotifier. Для L2CAP вводятся два новых типа: L2CAPConnection и L2CAPConnectionNotifier. 
+
+StreamConnection является субинтерфейсом InputConnection и OutputConnection, которые возвращают входящий и исходящий потоки и позволяют получать и отправлять данные. Интерфейс StreamConnectionNotifier представляет серверную часть stream соединения. StreamConnectionNotifier определяет единственный метод acceptAndOpen(), который ожидает входящее соединение и открывает его. Для получения более подробной информации об этом интерфейсе можете обратиться к MIDP 1.0 Javadoc. 
+
+L2CAPConnection также является субинтерфейсом InputConnection и OutputConnection. Он позволяет получать и отправлять сырые данные, а также для поиска других устройств посылает и принимает Maximum Transmission Unit (MTU). MTU определяет максимальное число байт, которые могут быть отправлены и получены без потери данных. L2CAPConnectionNotifier очень похож на StreamConnectionNotifier, он также представляет серверную часть L2CAP подключения. L2CAPConnectionNotifier определяет единственный метод acceptAndOpen(), который ждет и открывает входящее L2CAP соединение. 
+Создание соединения
+
+Создание Bluetooth (сервер и клиент) соединения аналогично созданию других типов GCF соединений, то есть оно реализуется с помощью класса Connector. Для создания соединения используется метод Connector.open() и соответствующий URL, описывающий тип создаваемого Bluetooth соединения. Всего существуют три формы метода open(): 
+open(String url) 
+open(String url, int mode) 
+open(String url, int mode, boolean timeout) 
+
+Где 
+url - это URL, описывающий тип создаваемого Bluetooth соединения (пример приведен ниже). 
+mode - определяет режим соединения: READ, WRITE или READ_WRITE (последнее используется по умолчанию). 
+timeout - это флаг, который указывает, что вызывающий ожидает возвращения сообщения об истечении времени ожидания (InterruptedIOException), если основное подключение поддерживает механизм уведомлений (по умолчанию флаг установлен в false). 
+
+Наиболее часто используется первая форма записи. Параметр URL имеет следующий вид: 
+
+scheme://host:port;parameters
+
+Где 
+scheme - определяет тип соединения (см приведенную ниже таблицу). 
+host - для клиента определяет удаленный адрес сервера; для сервера: licalhost. 
+port - для клиента определяет протокол соединения; для сервера - service UUID. 
+parameters - дополнительные параметры, например дружественное имя или размер MTU. 
+
+В следующей таблице приведена информация о URL схеме и типах GCF соединения, которые можно использовать для RFCOMM и L2CAP Bluetooth соединениях: Bluetooth Connection 	URL Scheme	Client Connection 	Server Connection
+Serial Port Profile (RFCOMM)	Btspp	StreamConnection	StreamConnectionNotifier, StreamConnection 
+L2CAP	btl2cap	L2CAPConnection	L2CAPConnectionNotifier, L2CAPConnection 
+
+
+Для создания клиентского Bluetooth соединения, Вы должны указать в URL адрес удаленного устройства и канал. Например, чтобы создать RFCOMM соединение, укажите в URL btspp схему, удаленный адрес и канал сервиса: 
+
+StreamConnection con = (StreamConnection) Connector.open("btspp://0050C000321B:5"); 
+
+Для L2CAP соединения аналогично указываем схему btl2cap, адрес и мультиплексор обслуживания протокола. 
+
+L2CAPConnection con = (L2CAPConnection) Connector.open("btl2cap://0050C000321B:1000"); 
+
+Для обнаружения клиентского соединения, используйте метод ServiceRecord.getConnectionURL(). 
+
+Для того чтобы создать серверное Bluetooth соединение, необходимо указать localhost, service UUID и имя. Например, для создания RFCOMM (SPP) соединения, укажите схему btspp, localhost в качестве адреса, UUID и имя: 
+
+StreamConnectionNotifier cn = (StreamConnectionNotifier) Connector.open("btspp://localhost:" + MY_SERVICE_NUMBER); 
+
+Здесь переменная MY_SERVICE_NUMBER содержит UUID и имя сервиса: 
+
+"3B9FA89520078C303355AAA694238F08;name=mySPPSrv".
+
+Для создания L2CAP соединения, укажите схему btl2cap, UUID и имя: 
+
+L2CAPConnectionNotifier = cn (L2CAPConnectionNotifier) 
+Connector.open("btl2cap://localhost:" + MY_SERVICE_NUMBER); 
+
+MY_SERVICE_NUMBER определяется аналогично случаю RFCOMM (SPP)
+
+Перед созданием Bluetooth соединения необходимо получить ссылку на локальное устройство и сделать его доступным для поиска: 
+
+LocalDevice local = LocalDevice.getLocalDevice();
+local.setDiscoverable(DiscoveryAgent.GIAC); 
+Ожидание соединения
+
+Ожидание соединения складывается из 
+Создания сервера соединения, используя подходящий механизм прослушивания: 
+Для RFCOMM - StreamConnectionNotifier 
+Для L2CAP - L2CAPConnectionNotifier 
+Ожидания принятия и открытия нового соединения с помощью метода acceptAndOpen(). 
+
+Listing 1. Обработка входящего L2CAP соединения
+L2CAPConnectionNotifier server = null; 
+byte[] data = null; 
+int length; 
+: 
+: 
+try { 
+    // Получаем ссылку на локальное устройство и делаем его доступным для поиска
+    LocalDevice local = LocalDevice.getLocalDevice(); 
+    local.setDiscoverable(DiscoveryAgent.GIAC); 
+    // Инициализируем прослушивание L2CAP соединения
+    server = (L2CAPConnectionNotifier) 
+     Connector.open("btl2cap://localhost:1020304050d0708093a1b121d1e1f100"); 
+    while (!done) { 
+        L2CAPConnection conn = null; 
+        // Ожидаем входящее L2CAP соединение 
+        conn = server.acceptAndOpen(); 
+        // Читаем входящие данные
+        length = conn.getReceiveMTU(); 
+        data = new byte[length]; 
+        length = conn.receive(data); 
+        : 
+        : 
+    } 
+} catch (Exception e) { 
+    ... Обработка исключительных ситуаций
+} 
+
+Listing 2. Обработка входящего потокового соединения.
+StreamConnectionNotifier server = null; 
+byte[] data = new byte[256]; 
+int length; 
+: 
+: 
+try { 
+    // Получаем ссылку на локальное устройство и делаем его доступным для поиска 
+    LocalDevice local = LocalDevice.getLocalDevice(); 
+    local.setDiscoverable(DiscoveryAgent.GIAC); 
+    // Инициализируем прослушивание потокового соединения
+    server = (StreamConnectionNotifier)Connector.open( 
+        "btspp://localhost:11111111111111111111111111111111"); 
+    while (!done) { 
+        StreamConnection conn = null; 
+        // Ожидаем входящее потоковое соединение 
+        conn = server.acceptAndOpen(); 
+        // Читаем входящие данные 
+        InputStream in = conn.openInputStream(); 
+        length = in.read(data); 
+        : 
+        : 
+    } 
+} catch (Exception e) { 
+    ... Обработка исключительных ситуаций
+} 
+Отправка и получение данных
+
+Для отправки и получения потоковых данных используется StreamConnection, а для отправки и получения L2CAP данных - L2CAPConnection
+
+Listing 3. Отправка потока данных с помощью L2CAPConnection. 
+String url = "..."; 
+int index = 0; 
+L2CAPConnection con = null; 
+transmitBuffer[] temp = null; 
+byte[] data = ...; 
+ 
+try { 
+    // Открываем соединение с сервером 
+    con = (L2CAPConnection)Connector.open(url); 
+    // Задаем transmit MTU (максимальный размер данных, который может быть передан)
+    int MTUSize = con.getTransmitMTU(); 
+    // Создаем буфер размером MTU. 
+    transmitBuffer = new byte[MaxOutBufSize]; 
+    : 
+    : 
+ 
+    while (index < data.length) { 
+        // Отправка данных ... перемещение MTUSize байт из буфера передаваемых данных
+        if ((data.length - index) < MTUSize) { 
+            System.arraycopy(data, index, transmitBuffer, 0, data.length - index); 
+        } else { 
+            System.arraycopy(data, index, transmitBuffer, 0, MTUSize); 
+        } 
+        // Отправка данных и обновление индекса данных
+        con.send(transmitBuffer); 
+        index += MTUSize; 
+        // Очищение буфера передаваемых данных
+        for (int=0; i<MTUSize; i++) transmitBuffer[i] = 0; 
+    } 
+    // Закрытие исходящего соединения и потока.
+    con.close(); 
+} catch (Exception e) { 
+    ... Обработка исключительных ситуаций.
+} 
+
+
+Listing 4. Отправка потока данных с помощью StreamConnection. 
+String url = “…”; 
+OutputStream os = null; 
+StreamConnection con = null; 
+: 
+: 
+try { 
+   // Открываем соединение с сервером 
+   con =(StreamConnection)Connector.open(url); 
+   // Открываем исходящий поток 
+   os = con.openOutputStream(); 
+   // Отправляем поток данных на удаленное устройство 
+   os.write(data.getBytes()); 
+   // Закрываем исходящее соединение и поток
+   os.close(); 
+   con.close(); 
+} catch (Exception e) { 
+    ... Обрабатываем исключительные ситуации 
+} 
+
+Обзор Device Management API
+
+В основе механизмов управления устройством лежат классы javax.bluetooth.LocalDevice, javax.bluetooth.RemoteDevice и javax.bluetooth.DeviceClass. Реализуемые ими методы управления являются частью Generic Access Profile (GAP). 
+Локальное устройство
+
+Доступ к локальному Bluetooth устройству можно получить через javax.bluetooth.LocalDevice. Этот класс предоставляет методы управления, восстановления и получения информации о локальном устройстве (например, Bluetooth адрес, класс устройства, информация об агенте поиска). Приведем наиболее часто используемые на практике методы: 
+static LocalDevice getLocalDevice() - метод возвращает LocalDevice объект, представляющий локальное устройство. 
+java.lang.String getBluetoothAddress() - возвращает адрес локального Bluetooth устройства. Адрес возвращается в виде Java.lang.String и состоит из 12 символов. 
+java.lang.String getFriendlyName() - метод возвращает дружественное имя локального Bluetooth устройства. 
+DiscoveryAgent getDiscoveryAgent() - метод возвращает агент поиска для локального устройства. 
+boolean setDiscoverable(int mode) - метод задает режим доступности для поиска. 
+static java.lang.String getProperty(java.lang.String property - метод возвращает системные настройки Bluetooth устройства. 
+ServiceRecord getRecord(javax.microedition.io.Connection notifier) - метод возвращает запись обслуживания, соответствующую переданному механизму уведомления (btspp, btl2cap или btgoep). 
+
+Listing 5. Использование LocalDevice методов.
+import javax.microedition.io.*; 
+import javax.bluetooth.*; 
+ 
+LocalDevice localDevice; // Локальное устройство 
+String localAddress; // Адрес локального устройства 
+String localName; // Имя локального устройства
+DiscoveryAgent agent; // Агент поиска для локального Bluetooth устройства
+: 
+: 
+try { 
+    // Получаем локальное устройство 
+    localDevice = LocalDevice.getLocalDevice(); 
+    // Делаем его доступным для поиска 
+    localDevice.setDiscoverable(DiscoveryAgent.GIAC); 
+    // Получаем адрес локального Bluetooth устройства 
+    localAddress = localDevice.getBluetoothAddress(); 
+    // Получаем имя устройства 
+    localName = localDevice.getFriendlyName(); 
+     // Получаем объект агента поиска для изучения устройства и сервисов
+    agent = localDevice.getDiscoveryAgent(); 
+} catch (Exception e) { 
+    ... Обрабатываем ошибки
+} 
+Удаленное устройство
+
+Удаленное Bluetooth устройство доступно через javax.bluetooth.RemoteDevice. Этот класс предоставляет методы для получения RemoteDevice объекта, связанного с Bluetooth соединением; методы получения имени и адреса удаленного устройства, а также методы, относящиеся к обеспечению безопасности. Приведем наиболее используемые их них: 
+static RemoteDevice getRemoveDevice(javax.microedition.io.Connection) - метод возвращает RemoteDevice объект, связанный с переданным соединением. 
+java.lang.String getBluetoothAddress() - возвращает адрес удаленного Bluetooth устройства. Адрес возвращается в виде Java.lang.String и состоит из 12 символов. 
+java.lang.String getFriendlyName() - метод возвращает дружественное имя удаленного Bluetooth устройства. 
+boolean authenticate() - подтверждение подлинности удаленного устройства. 
+boolean isAuthenticated() - определяет, прошло ли удаленное устройство проверку. 
+boolean isEncrypted() - определяет, должно ли выполняться шифрование данных при обмене с удаленным устройством 
+
+Listing 6. Using the RemoteDevice methods. 
+import javax.microedition.io.*; 
+import javax.bluetooth.*; 
+ 
+String url = "..."; 
+StreamConnection con; 
+RemoteDevice remoteDevice; // Удаленное устройство
+String remoteAddress; // Адрес удаленного устройства
+String remoteName; // Имя удаленного устройства
+: 
+: 
+try { 
+    con = (StreamConnection) Connector.open(url); 
+    remoteDevice = RemoteDevice.getRemoteDevice(con); 
+    // Получаем адрес удаленного устройства
+    remoteAddress = remoteDevice.getBluetoothAddress(); 
+    // Получаем имя удаленного устройства
+    remoteName = remoteDevice.getFriendlyName(); 
+    if (!remoteDevice.isEncrypted()) { 
+        // Если данные не расшифрованы, пытаемся их расшифровать.
+        if (!remoteDevice.authenticate() || !remoteDevice.encrypt(con, true)) { 
+            // Ошибка, невозможно расшифровать данные
+            return; 
+        } 
+    } 
+} catch (Exception e) { 
+    ... Обработка ошибок
+} 
+Класс устройства
+
+DeviceClass представляет класс устройства (CoD) соответственно Bluetooth спецификации. Классы устройств определяются с помощью major, minor и service классов. Для DeviceClass определены следующие методы: 
+int getMajorDeviceClass() - возвращает major классы устройства. 
+int getMinorDeviceClass() - возвращает minor классы устройства. 
+int getServiceClasses() - возвращает service классы. 
+
+Listing 7. Использование методов DeviceClass. 
+static final NLDMSC = 0x22000; // Networking, Limited Discoverable Major Service Class 
+static final PHONE_MAJOR_CLASS = 0x200; 
+static final CELLULAR_MINOR_CLASS = 0x04; 
+: 
+: 
+LocalDevice localDevice; 
+DeviceClass deviceClass; 
+: 
+: 
+try { 
+    // Получаем локальное устройство 
+    localDevice = LocalDevice.getLocalDevice(); 
+    // Получаем класс устройства для локального устройства
+    deviceClass = localDevice.getDeviceClass(); 
+    // В зависимости от класса устройства выполняем подходящие действия
+    if (deviceClass.getMajorDeviceClass() == PHONE_MAJOR_CLASS) { 
+        if (deviceClass.getMinorDeviceClass() == CELLULAR_MINOR_CLASS) { 
+            : 
+            : 
+        } 
+    } 
+} catch (Exception e) { 
+    ... Обработка ошибок
+} 
+Получение информации о настройках Bluetooth устройства
+
+Java APIs for Bluetooth определяет ряд свойств для локального Bluetooth устройства. Эти свойства могут быть получены с помощью метода LocalDevice.getProperty(): 
+
+LocalDevice locaDevice = LocalDevice.getLocalDevice(); 
+String apiVer = localDevice.getProperty(“bluetooth.api.version”); 
+
+В приведенной ниже таблице содержатся доступные свойства и их описаниеСвойство	Описание
+bluetooth.api.version 	Номер поддерживаемой версии Java APIs for Bluetooth
+bluetooth.l2cap.receiveMTU.max 	Максимальный поддерживаемый L2CAP размер ReceiveMTU в байтах
+bluetooth.connected.devices.max 	Максимальное число подключенных устройств (включая остановленные устройства)
+bluetooth.connected.inquiry 	Разрешены ли запросы во время соединения?
+bluetooth.connected.page 	Разрешена ли работа со страницами во время соединения?
+bluetooth.connected.inquiry.scan 	Разрешено ли сканирование запросов во время соединения?
+bluetooth.connected.page.scan 	Разрешено ли сканирование страниц во время соединения?
+bluetooth.master.switch 	Возможно ли переключение режимов master/slave?
+bluetooth.sd.trans.max 	Максимальное число параллельных поисков сервисов.
+bluetooth.sd.attr.retrievable.max 	Максимальное число атрибутов сервиса, которое можно получить из сервисной записи
+
+
+Эта статья является переводом документа Developing Applications with the Java APIs for Bluetooth™ (JSR-82), найденного на сайте http://developer.sonyericsson.com
+Перевод: aRix.

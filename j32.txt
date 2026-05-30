@@ -1,0 +1,36 @@
+Tips for creating Java 3D MIDlets
+The Java 3D engine in the Sony Ericsson K700 provides access to a whole new world of development possibilities. The K700 supports Java 3D through JSR-184 and Mascot Capsule version 3 API's, but in this article we'll focus on tips for the Mascot Capsule version 3 API's.
+
+General 3D modeling tips
+The Mascot Capsule Engine version 3 only supports polygon transparency of 0%, 50% or 100%. Be sure to only use these values when you're creating your 3D model.
+
+Export your 3D models to one BAC file for each model. Even though it's possible to have several models in the same BAC file, it'll only make the programming more complicated.
+
+Keep your model at 0,0,0 when exporting, as this will make programming easier.
+
+Camera and Light are not exported to the BAC file, so don't spend any extra time setting these up in your 3D model.
+
+Bones should either have a weight of 0% or 100%, nothing in between!
+
+3D display tips 
+There are at least three ways to reduce texture distortion in your 3D MIDlet: 
+Use more polygons for the distorted area. 
+Use textures that make it harder to spot whether they're distorted or not, i.e. when possible use a random pattern rather that a very distinct one. 
+Try to hide the area behind 2D graphics.
+
+Mascot Capsule uses a Z-sort (average) algorithm to calculate the order of polygons. Like all Z-sorts, this means that polygons are sometimes rendered in an order that doesn't look right to the eye. Subdividing the polygons can solve this. If the ordering issues, on the other hand, are between models, then you can reduce the problems by flushing the drawing buffer between different models.
+
+Performance tips
+Cheat as much as you can! Try to think of different ways of creating the same effect and then do it in the way that consumes the least processing power and memory. 
+
+The number of polygons in you 3D model is, of course, critical for performance. However, this figure is not the only thing that affects the performance. On a device with such limited processing power as a mobile phone, the whole area to be painted must be taken into consideration. This means that for your benchmarking, you should actually count the number of pixels to be drawn rather than just the number of polygons. A small model with many polygons can actually draw faster than a big model with fewer polygons.
+
+If possible, use quads instead of triangles when you create your 3D models.
+
+Textures will always reserve enough memory to fit an 8-bit texture of 256*256 pixels, even if your actual texture file is smaller than that. Therefore, make sure to use a single 256*256 texture in preference to using four with a size of128*128 each.
+
+As memory is limited, reuse your textures as much as possible. Simple re-use includes having just one ear in your face texture and then using it for both the left and right sides.
+
+A 3D animation can be created automatically by your 3D program if you define a set of key-frames; points within the animation where you have set up your model exactly as you want it to look. The program is then capable of rendering all frames in between your key-frames, thus saving you a great amount of work. However, make sure that you don't use too many, or the wrong key-frames, as this will impact performance.
+
+Be careful when you add bones to your 3D model and use as few as possible. For example, you don't need to add bones all the way out into the fingers if the hand is not a very important detail in your model. Consider making the whole hand stiff and connected directly to the wrist instead.
