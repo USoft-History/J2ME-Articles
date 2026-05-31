@@ -1,0 +1,229 @@
+﻿14 июня 2005 г. - Использование 3D графики в J2ME. Простейшее 3D приложение.
+
+
+Введение 
+
+Возможность работать с 3D графикой программисты получили вместе с выходом MIDP 2.0, в состав которого был включен дополнительный пакет "Mobile 3D Graphics API" (или JSR 184). Фактически он является Java стандартом для работы с 3D графикой на портативных устройствах. Пакет имеет два уровня, верхний - retained mode и нижний - immediate mode. Первый позволяет работать с 3D сценами, используя виртуальную камеру и источники света. Второй - непосредственно рисовать объекты. Оба уровня при необходимости могут использоваться в одном приложении. 
+
+В этой статье будет рассмотрен immediate mode. 
+
+Для начала давайте перечислим классы, которые предоставляет в наше распоряжение 3D API. (В дополнение к API, JSR 184 также содержит структуры для описания сцен и соответствующий формат для эффективного представления и развертывания 3D контента. В JSR используется m3g формат файлов.) 
+3D API классыAnimationController	Контролирует последовательность мультипликации
+AnimationTrack	Связывает KeyframeSequence с AnimationController.
+Appearance	Набор объектов для представления атрибутов рендеринга Mesh или Spring3D
+Background	Определяет способ очистки видео порта
+Camera	                Узловой элемент сцены, определяющий положение камеры и экрана проекции
+CompositingMode	Класс Appearance, формирующий атрибуты композиции в пикселях
+Fog	                Класс Appearance, определяющий параметры тумана.
+Graphics3D	Единичный элемент 3D графики. Весь рендеринг осуществляется через метод render() этого класса.
+Group	                Узловой элемент графической сцены, позволяющий сохранять неупорядоченный набор других узлов как свои дочерние записи.
+Image2D	                Двухмерное изображение, которое может использоваться в качестве текстуры, заднего плана или спрайта.
+IndexBuffer	Этот класс определяет, как нужно соединить вершины, для того чтобы получить геометрический объект.
+KeyframeSequence	Формирует анимацию, как последовательность ключевых кадров с временными метками.
+Light	                 Представляет различные виды источников света.
+Loader	                 Загружает графические узлы и узлы других компонентов в законченную графическую сцену.
+Material	                Формирует атрибуты материала для правильного вычисления освещения.
+Mesh	                 Представляет трехмерный объект, определенный как полигонная поверхность.
+MorphingMesh	Представляет трансформацию вершин полигонной поверхности.
+Node	                Абстрактный класс узлов графической сцены. Всего поддерживается пять видов узлов: Camera, Mesh, Sprite3D, Light, и Group.
+Object3D	                Абстрактный класс для объекта, являющегося частью 3D мира.
+PolygonMode	Формирует параметры полигонов.
+RayIntersection	Сохраняет ссылку на пересечение Mesh или Sprite3D и информацию о точке пересечения.
+SkinnedMesh	Представляет скелетную анимацию полигонной сети.
+Sprite3D	                Представляет 2D изображение в трехмерном пространстве.
+Texture2D	Формирует 2D рисунок текстуры и набор параметров, определяющих способ "прикрепления" текстуры.
+Transform	универсальная матрица вещественных чисел размером 4x4, представляющая трансформацию.
+Transformable	Абстрактный базовый класс для Node и Texture2D. 
+TriangleStripArray	Определяет массив полос треугольников.
+VertexArray	Массив целочисленных векторов, представляющих положение вершин, нормалей, цветов или текстурных координат.
+VertexBuffer	Сохраняет ссылки на VertexArrays, содержащий положение вершин, нормалей, цветов или текстурных координат для набора вершин.
+World	                Специальный узел группы, являющийся контейнером самого верхнего уровня для графической сцены.
+
+Простейшее J2ME 3D приложение
+
+Давайте напишем простейшее 3D приложение - вращающийся полигон. Наш полигон - кубик, на который натянута текстура. В листинге 1 приведен главный класс MIDlet-а. Он создает приложение и устанавливает таймер для запуска MyCanvas
+
+Листинг 1. Класс MIDletMain
+
+import javax.microedition.midlet.*;
+import javax.microedition.lcdui.*;
+import java.util.*;
+
+public class MIDletMain extends MIDlet {
+ static MIDletMain midlet;
+ MyCanvas d = new MyCanvas();
+ Timer iTimer = new Timer();
+
+ public MIDletMain() {
+  this.midlet = this;
+ }
+
+ public void startApp() {
+  Display.getDisplay(this).setCurrent(d);
+  iTimer.schedule( new MyTimerTask(), 0, 40 );
+ }
+
+ public void pauseApp() {
+ }
+
+ public void destroyApp(boolean unconditional) {
+ }
+
+
+ public static void quitApp() {
+  midlet.destroyApp(true);
+  midlet.notifyDestroyed();
+  midlet = null;
+ }
+
+
+ class MyTimerTask extends TimerTask {
+public void run() {
+   if( d != null ) {
+    d.repaint();
+   }
+  }
+ }
+}
+
+В листинге 2 показан класс MyCanvas. Он содержит все операции с графикой. В методе init() создаются вершины, загружается и устанавливается текстура. Также там задаются вид и задний план. Метод paint() рисует и вращает куб.
+
+Листинг 2. Класс MyCanvas
+
+import javax.microedition.lcdui.*;
+import javax.microedition.m3g.*;
+
+public class MyCanvas extends Canvas {
+
+ private Graphics3D graphics3d;
+ private Camera camera;
+ private Light light;
+ private float angle = 0.0f;
+ private Transform transform = new Transform();
+ private Background background = new Background();
+ private VertexBuffer vbuffer;
+ private IndexBuffer indexbuffer;
+ private Appearance appearance;
+ private Material material = new Material();
+ private Image image;
+
+ public MyCanvas() {
+  // Устанавливаем Displayable для прослушивания команд от пользователя
+  setCommandListener(new CommandListener() {
+   public void commandAction(Command c, Displayable d) {
+    if (c.getCommandType() == Command.EXIT) {
+     MIDletMain.quitApp();}}
+  });
+  try { init();}
+  catch(Exception e) { e.printStackTrace();}
+ }
+
+ /**
+  * Инициализация.
+  */
+ private void init() throws Exception {
+  addCommand(new Command("Exit", Command.EXIT, 1));
+  graphics3d = Graphics3D.getInstance();
+
+  camera = new Camera();
+  camera.setPerspective( 60.0f,
+   (float)getWidth()/ (float)getHeight(),
+   1.0f,
+   1000.0f );
+
+  light = new Light();
+  light.setColor(0xffffff);
+  light.setIntensity(1.25f);
+
+  short[] vert = {
+   5, 5, 5, -5, 5, 5, 5,-5, 5, -5,-5, 5,
+   -5, 5,-5, 5, 5,-5, -5,-5,-5, 5,-5,-5,
+   -5, 5, 5, -5, 5,-5, -5,-5, 5, -5,-5,-5,
+   5, 5,-5, 5, 5, 5, 5,-5,-5, 5,-5, 5,
+   5, 5,-5, -5, 5,-5, 5, 5, 5, -5, 5, 5,
+   5,-5, 5, -5,-5, 5, 5,-5,-5, -5,-5,-5 };
+
+  VertexArray vertArray = new VertexArray(vert.length / 3, 3, 2);
+  vertArray.set(0, vert.length/3, vert);
+
+  // Задаем нормали куба
+  byte[] norm = {
+   0, 0, 127, 0, 0, 127, 0, 0, 127, 0, 0, 127,
+   0, 0,-127, 0, 0,-127, 0, 0,-127, 0, 0,-127,
+   -127, 0, 0, -127, 0, 0, -127, 0, 0, -127, 0, 0,
+   127, 0, 0, 127, 0, 0, 127, 0, 0, 127, 0, 0,
+   0, 127, 0, 0, 127, 0, 0, 127, 0, 0, 127, 0,
+   0,-127, 0, 0,-127, 0, 0,-127, 0, 0,-127, 0 };
+
+  VertexArray normArray = new VertexArray(norm.length / 3, 3, 1);
+  normArray.set(0, norm.length/3, norm);
+
+  // Задаем текстурные координаты
+  short[] tex = {
+   1, 0, 0, 0, 1, 1, 0, 1,
+   1, 0, 0, 0, 1, 1, 0, 1,
+   1, 0, 0, 0, 1, 1, 0, 1,
+   1, 0, 0, 0, 1, 1, 0, 1,
+   1, 0, 0, 0, 1, 1, 0, 1,
+   1, 0, 0, 0, 1, 1, 0, 1 };
+
+  VertexArray texArray = new VertexArray(tex.length / 2, 2, 2);
+  texArray.set(0, tex.length/2, tex);
+
+  int[] stripLen = { 4, 4, 4, 4, 4, 4 };
+
+  // VertexBuffer для нашего объекта
+  VertexBuffer vb = vbuffer = new VertexBuffer();
+  vb.setPositions(vertArray, 1.0f, null);
+  vb.setNormals(normArray);
+  vb.setTexCoords(0, texArray, 1.0f, null);
+
+  indexbuffer = new TriangleStripArray( 0, stripLen );
+
+  // изображение для текстуры
+  image = Image.createImage( "/pic1.png" );
+  Image2D image2D = new Image2D( Image2D.RGB, image );
+  Texture2D texture = new Texture2D( image2D );
+  texture.setFiltering(Texture2D.FILTER_NEAREST,
+        Texture2D.FILTER_NEAREST);
+  texture.setWrapping(Texture2D.WRAP_CLAMP,
+       Texture2D.WRAP_CLAMP);
+  texture.setBlending(Texture2D.FUNC_MODULATE);
+
+  // создаем вид
+  appearance = new Appearance();
+  appearance.setTexture(0, texture);
+  appearance.setMaterial(material);
+  material.setColor(Material.DIFFUSE, 0xFFFFFFFF);
+  material.setColor(Material.SPECULAR, 0xFFFFFFFF);
+  material.setShininess(100.0f);
+
+  background.setColor(0xffffcc);
+ }
+
+ protected void paint(Graphics g) {
+  graphics3d.bindTarget(g, true,
+      Graphics3D.DITHER |
+      Graphics3D.TRUE_COLOR);
+  graphics3d.clear(background);
+
+  // устанавливаем камеру
+  Transform transform = new Transform();
+  transform.postTranslate(0.0f, 0.0f, 30.0f);
+  graphics3d.setCamera(camera, transform);
+
+  // Устанавливаем имточники света
+  graphics3d.resetLights();
+  graphics3d.addLight(light, transform);
+
+  // Задаем вращение
+  angle += 1.0f;
+  transform.setIdentity();
+  transform.postRotate(angle, 1.0f, 1.0f, 1.0f);
+
+  graphics3d.render(vbuffer, indexbuffer, appearance, transform);
+  graphics3d.releaseTarget();
+ }
+}
+
+Конечно, эта статья не в коей мере не претендует на руководство по созданию 3D игр, но она позволяет увидеть всю простоту и доступность создания 3D приложений для телефонов.

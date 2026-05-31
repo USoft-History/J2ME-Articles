@@ -1,0 +1,338 @@
+﻿30 мая 2005 г. - Реализация анимации и прозрачности в MIDP 1.0
+
+
+
+Разработчики, использующие MIDP, часто спрашивают, как создать MIDlet, выводящий анимацию на экран. MIDP 1.0 не поддерживает анимирование рисунков, но эту возможность можно реализовать самостоятельно. 
+
+Базовой посылкой любой анимации является быстрая поочередная отрисовка отдельных изображений. Рисунки должны выводиться последовательно. Чем меньше различий в следующих друг за другом рисунках, тем лучше.
+
+При подготовке анимации первым делом надо создать ее кадры. Для этого запустите ваш любимый графический редактор и нарисуйте серию рисунков. Каждый рисунок - это кадр вашей анимации. Сохраните рисунки в формате PNG. (Именно этот формат поддерживается всеми телефонами.)
+
+Существует два способа передачи рисунков проигрывающему их MIDlet-у. Первый - выложить рисунки на веб сервер и получить к ним доступ из MIDlet-а через протокол http. Второй - использовать Writless Toolkit и просто записать эти рисунки в res директорию проекта перед его сборкой.
+
+Анимация чем-то походит на бухгалтерию: нужно постоянно следить за выводимым на экран кадром и своевременно производить его смену. Этот процесс можно автоматизировать, вынося служебное действие в отдельный класс AnimatedImage:
+
+import java.util.*;
+import javax.microedition.lcdui.*;
+
+// Определяем анимированное изображение, которое 
+// фактически является набором рисунков одинакового размера,
+// выводящихся друг за другом и создающих эффект движения.
+
+public class AnimatedImage extends TimerTask {
+   private Canvas canvas;
+   private Image[] images;
+   private int[][] clipList;
+   private int current;
+   private int x;
+   private int y;
+   private int w;
+   private int h;
+
+   public AnimatedImage( Image[] images ){
+     this( null, images, null );
+   }
+
+   // Создаем пустую анимацию
+
+   public AnimatedImage( Canvas canvas, Image[]
+     images ){ this( canvas, images, null );
+   }
+
+  //Создаем анимацию. Если canvas определен, то перерисовка
+  //будет осуществляться по срабатыванию таймера. Если 
+  //определен список отсечения, то изображение рисуется многократно,
+  //каждый раз с различным прямоугольником отсечения, для
+  //эмуляции прозрачных частей.
+
+   public AnimatedImage( Canvas canvas, Image[] images,
+       int[][] clipList ){
+     this.canvas = canvas;
+     this.images = images;
+     this.clipList = clipList;
+
+     if( images != null && clipList != null ){
+       if( clipList.length < images.length ){
+       throw new IllegalArgumentException();
+       }
+     }
+
+     if( images != null && images.length > 0 ){
+       w = images[0].getWidth();
+       h = images[0].getHeight();
+     }
+}
+
+   // Переходим к следующему кадру.
+
+   public void advance( boolean repaint ){
+     if( ++current >= images.length ){
+       current = 0;
+     }
+
+     if( repaint && canvas != null && canvas.isShown() 
+){
+       canvas.repaint( x, y, w, h );
+       canvas.serviceRepaints();
+     }
+   }
+
+  //Рисуем текущее изображение анимации. Если список отсечения
+  //не определен, просто копируем его, в противном случае
+  //устанавливаем отсекаемый прямоугольник и рисуем изображение
+  //несколько раз.
+
+   public void draw( Graphics g ){
+     if( w == 0 || h == 0 ) return;
+
+     int which = current;
+
+     if( clipList == null || clipList[which] == null){
+       g.drawImage( images[which], x, y,
+       g.TOP | g.LEFT );
+     } else {
+       int cx = g.getClipX();
+       int cy = g.getClipY();
+       int cw = g.getClipWidth();
+       int ch = g.getClipHeight();
+
+       int[] list = clipList[which];
+
+       for( int i = 0; i + 3 <= list.length; i += 4 ){
+         g.setClip( x + list[0], y + list[1],
+         list[2], list[3] );
+         g.drawImage( images[which], x, y,
+         g.TOP | g.LEFT );
+       }
+
+       g.setClip( cx, cy, cw, ch );
+     }
+   }
+
+   // Перемещаем верхний левый угол анимации.
+
+   public void move( int x, int y ){
+     this.x = x;
+     this.y = y;
+   }
+
+   // Метод вызывается таймером. Переходим к следующему кадру.
+
+   public void run(){
+     if( w == 0 || h == 0 ) return;
+
+     advance( true );
+   }
+}
+
+Вы передаете конструктору класса AnimatedImage массив объектов Image - отдельных кадров анимации. Эти изображения должны иметь одинаковые ширину и высоту. Для загрузки изображений из JAR файла используйте метод Image.createImage():
+
+private Image[] loadFrames( String name, int frames ) throws IOException {
+   Image[] images = new Image[frames];
+   for( int i = 0; i < frames; ++i ){
+     images[i] = Image.createImage( name + i + ".png" );
+   }
+   return images;
+}
+
+Например, чтобы загрузить серию кадров, сохраненных как /images/bird0.png, /images/bird1 ... /images/bird6.png, а затем создать анимированное изображение, проделайте следующее:
+
+Image[] frames = loadFrames( "/images/bird", 7 );
+AnimatedImage ai = new AnimatedImage( frames );
+ai.move( 20, 20 ); // устанавливаем левый верхний угол в точку 20,20 
+
+Обратите внимание, AnimatedImage следит за позицией верхнего левого угла изображения и рисует себя относительно этой позиции.
+
+Вы можете передать дополнительный Canvas интерфейс и список отсечения. Если Вы определите canvas и будете использовать таймер для автоматической смены кадров, например как в приведенном ниже примере, экран будет автоматически перерисовываться после смены кадров. Кроме того, Вы имеете возможность производить перерисовку экрана в любое удобное время. 
+
+Поскольку MIDP 1.0 не поддерживает прозрачные изображения, AnimatedImage берет на себя их реализацию с помощью использования списка отсечений - набора прямоугольных областей в изображении. Изображение рисуется несколько раз. Каждый раз выводится один отсекаемый регион из списка отсечений. Для каждого кадра должен быть создан свой список. Он представляет собой массив целых чисел. Размер массива кратен четырем, поскольку для определения каждой области отсечения требуется четыре числа: координаты левого верхнего угла относительно изображения, ширина и высота области. Использование списка отсечений замедляет анимацию. Для сложных изображений предпочтительней использовать векторную графику. 
+
+Для таймера используется объект класса java.util.TimerTask. На нашем сайте есть статья, описывающая работу с таймером. Ниже приведен пример использования:
+
+Timer timer = new Timer();
+AnimatedImage ai = ..... // получить изображений 
+timer.schedule( ai, 200, 200 );
+
+Каждые 200 миллисекунд таймер вызывает метод AnimatedImage.run, который производит смену кадра и, если canvas доступен, обновление экрана.
+
+В принципе все готово, осталось собрать мидлет. Мы создадим простой объект класса canvas, с прикрепленным к нему анимированным изображением.
+
+import java.util.*;
+import javax.microedition.lcdui.*;
+
+// Класс Canvas к которому Вы можете
+// прикрепить одну или несколько анимаций
+// При отрисовке canvas происходит циклическое
+//обращение к анимированному изображению
+//для отображения текущего кадра.
+
+public class AnimatedCanvas extends Canvas {
+    private Display display;
+    private Image offscreen;
+    private Vector images = new Vector();
+
+    public AnimatedCanvas( Display display ){
+        this.display = display;
+        //Если двойная буферизация не 
+        //поддерживается системой, реализуем
+        //ее самостоятельно
+
+        if( !isDoubleBuffered() ){
+            offscreen = Image.createImage( getWidth(),
+                                         getHeight() );
+        }
+    }
+
+    // Добавляем анимированное изображение в список.
+
+    public void add( AnimatedImage image ){
+        images.addElement( image );
+    }
+
+    //Рисуем canvas. Сначала стираем экран, а потом
+    //поочередно рисуем анимированные изображения.
+    //Двойная буферизация используется для устранения
+    //эффекта мерцания.
+
+    protected void paint( Graphics g ){
+        Graphics saved = g;
+
+        if( offscreen != null ){
+            g = offscreen.getGraphics();
+        }
+
+        g.setColor( 255, 255, 255 );
+        g.fillRect( 0, 0, getWidth(), getHeight() );
+
+        int n = images.size();
+        for( int i = 0; i < n; ++i ){
+            AnimatedImage img = (AnimatedImage)
+                              images.elementAt( i );
+            img.draw( g );
+        }
+
+        if( g != saved ){
+            saved.drawImage( offscreen, 0, 0,
+                       Graphics.LEFT | Graphics.TOP );
+        }
+    }
+}
+
+Как видите, класс AnimatedCanvas весьма прост. Он состоит из метода регистрации анимационного изображения и метода перерисовки. Каждый раз при обновлении экрана происходит его очистка и циклическое рисование зарегистрированных анимационных изображений. Обратите внимание на использование двойной буферизации. (На нашем сайте есть статья, посвященная этой теме.)
+
+import java.io.*;
+import java.util.*;
+import javax.microedition.lcdui.*;
+import javax.microedition.midlet.*;
+
+// Этот MIDlet отображает несколько простых анимаций.
+// На экране рисуется несколько птиц и производится их
+// анимирование.
+
+public class AnimationTest extends MIDlet
+                 implements CommandListener {
+
+    private static final int BIRD_FRAMES = 7;
+    private static final int NUM_BIRDS = 5;
+
+    private Display display;
+    private Timer timer = new Timer();
+    private AnimatedImage[] birds;
+    private Random random = new Random();
+
+    public static final Command exitCommand =
+                         new Command( "Exit",
+                                      Command.EXIT, 1 ); 
+
+    public AnimationTest(){
+    }
+
+    public void commandAction( Command c,
+                               Displayable d ){
+        if( c == exitCommand ){
+            exitMIDlet();
+        }
+    }
+
+    protected void destroyApp( boolean unconditional )
+                   throws MIDletStateChangeException {
+        exitMIDlet();
+    }
+
+    public void exitMIDlet(){
+        timer.cancel(); // Выключение...
+        notifyDestroyed();
+    }
+
+    // Генерация случайного числа
+
+    private int genRandom( int upper ){
+        return( Math.abs( random.nextInt() ) % upper );
+    }
+
+    public Display getDisplay(){ return display; }
+
+    // Инициализация. Создается canvas и набор птиц
+    // в произвольном месте экрана. Инициализируется 
+    // таймер.
+
+    protected void initMIDlet(){
+        try {
+            AnimatedCanvas c = new
+                       AnimatedCanvas( getDisplay() );
+            Image[] images =
+                   loadFrames( "/images/bird",
+                       BIRD_FRAMES );
+
+            int w = c.getWidth();
+            int h = c.getHeight();
+
+            birds = new AnimatedImage[ NUM_BIRDS ];
+            for( int i = 0; i < NUM_BIRDS; ++i ){
+                AnimatedImage b = new
+                          AnimatedImage( c, images );
+                birds[i] = b;
+                b.move( genRandom( w ), genRandom( h ) );
+                c.add( b );
+                timer.schedule( b, genRandom( 1000 ),
+                                genRandom( 400 ) );
+            }
+
+            c.addCommand( exitCommand );
+            c.setCommandListener( this );
+
+            getDisplay().setCurrent( c );
+        }
+        catch( IOException e ){
+            System.out.println( "Could not
+                load images" );
+            exitMIDlet();
+        }
+    }
+
+    // Загрузка анимации из PNG файлов.
+
+    private Image[] loadFrames( String name, int frames )
+                                   throws IOException {
+        Image[] images = new Image[frames];
+        for( int i = 0; i < frames; ++i ){
+            images[i] = Image.createImage( name +
+                i + ".png" );
+        }
+
+        return images;
+    }
+
+    protected void pauseApp(){
+    }
+
+    protected void startApp()
+                      throws MIDletStateChangeException {
+        if( display == null ){ 
+            display = Display.getDisplay( this );
+            initMIDlet();
+        }
+    }
+}
+
+В примере используется анимация летящей птицы, состоящая из семи кадров. MIDlet рисует пять таких птиц в произвольных точках экрана со случайной скоростью смены кадров. Полагаю, теперь Вы сможете самостоятельно доработать этот пример и использовать его для своих нужд.
