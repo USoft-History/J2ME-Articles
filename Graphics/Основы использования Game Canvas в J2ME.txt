@@ -1,0 +1,173 @@
+﻿16 мая 2005 г. - Основы использования Game Canvas в J2ME
+
+
+
+Большую часть приложений, разрабатываемых для J2ME, составляют игры. Поэтому не было ничего удивительного в том, что группа Java Community Process включила в MIDP 2.0 поддержку основных игровых возможностей. Давайте рассмотрим их реализацию - класс GameCanvas. 
+
+GameCanvas входит в состав пакета javax.microedition.lcdui.game и является расширением класса Canvas. Как Вы знаете, Canvas позволяет рисовать на экране используя низкоуровневый API, отслеживать события клавиатуры и стилуса. Недостаток Canvas в том, что он фактически блокирует приложение на время перерисовки экрана, то есть в это время Вы не имеете возможность обрабатывать события клавиатуры. Это может привести к тому, что игра будет реагировать с опозданием на действия пользователя. Будет создаваться впечатление, что игра тормозит, а управление не чувствительное. GameCanvas был разработан специально для того, чтобы устранить эти недостатки. 
+
+Первое о чем нужно помнить - то, что GameCanvas это все-таки Canvas, и все навыки работы с Canvas пригодятся и при работе с GgameCanvas. Например, методы showNotify() и hideNotify() все также вызываются, когда canvas переходит в видимый/невидимый режим. События от клавиатуры и стилуса все так же поступают в GameCanvas, за исключением некоторых подавляемых событий клавиатуры. Вы все также должны самостоятельно формировать рисунок на экране и можете прикреплять объекты Command к GameCanvas. Ниже приведен очень простой MIDlet, который тестирует canvas: 
+
+import javax.microedition.lcdui.*;
+import javax.microedition.lcdui.game.GameCanvas;
+
+public class DummyGameCanvas extends GameCanvas {
+
+   public DummyGameCanvas( boolean suppress ){
+     super( suppress );
+   }
+
+   switch( action ){
+   case DOWN:
+     return "DOWN";
+   case UP:
+     return "UP";
+   case LEFT:
+     return "LEFT";
+   case RIGHT:
+     return "RIGHT";
+   case FIRE:
+     return "FIRE";
+   case GAME_A:
+     return "GAME_A";
+   case GAME_B:
+     return "GAME_B";
+   case GAME_C:
+     return "GAME_C";
+   case GAME_D:
+     return "GAME_D";
+   }
+
+   return "";
+   }
+
+   protected void hideNotify(){
+     System.out.println( "hideNotify" );
+   }
+
+   protected void keyPressed( int key ){
+     System.out.println( "keyPressed " + key + " "
+       + getAction( key ) );
+   }
+
+   protected void showNotify(){
+     System.out.println( "showNotify" );
+   }
+}
+
+Сравнение этого класса с аналогом, построенным на использовании обычного canvas, позволяет выявить два существенных отличия. Во-первых, конструктору передается булевая переменная, которая указывает должны ли подавляться некоторые события клавиатуры или нет. Во-вторых, отсутствует метод paint(), как ненужный. Но, пожалуй, наибольшим отличием является отсутствие в DummyGameCanvas игрового цикла. 
+
+Вообще, компоненты пользовательского интерфейса MIDP управляются событиями, то есть методы вызываются системой напрямую в ответ на произошедшие события. В Canvas события поступают в очередь и поставляются приложению по одному, поэтому между возникновением события и его обработкой внутри приложения может пройти некоторое время. Особенно эта задержка заметна, когда происходит событие - перерисовка экрана. В gamecanvas реализован другой подход, позволяющий приложению быстро опрашивать клавиатуру и производить перерисовку в определенное время: опрос и перерисовка выполняются в цикле на отдельном потоке. 
+
+Для опроса клавиатуры используется метод getKeyStates(). Он возвращает бит-маску, отражающую изменения в состоянии клавиш действия (action keys) - определенных в классе Canvas - с момента последнего вызова этого метода.
+
+int state = getKeyStates();
+
+if( ( state & FIRE_PRESSED ) != 0 ){
+       // пользователь нажал кнопку FIRE
+}
+
+Это позволяет приложению своевременно и быстро проверять состояние клавиш даже в плотном цикле. Заметьте, события клавиатуры по-прежнему передаются gamecanvas, но вы можете подавлять события, нажимая клавиши действия. С другой стороны, события клавиатуры никогда не подавляются вызовом команд меню. 
+
+В GameCanvas реализована двойная буферизация. Это позволяет устранить эффект мерцания при перерисовке экрана. Фактически, все операции рисования производятся во вспомогательном буфере, а затем происходит копирование содержание этого буфера на экран. (Более подробно об этом рассказано в статье "Устранение эффекта мигания в играх. Двойная буферизация" на этом сайте.) Создание и управление внеэкранным буфером полностью берет на себя canvas. Для рисования во внеэкранный буфер используйте указатель, полученный от метода getGraphics(). (Этот метод каждый раз возвращает различные указатели, поэтому вы должны вызвать его однажды вне буфера и сохранить полученный указатель для дальнейшего использования.) Чтобы обновить экран после рисования, вызовите метод flushGraphics(), который скопирует текущее содержание внеэкранного буфера на экран. 
+
+Второй пример рисует летящие звезды.
+
+import java.util.Random;
+import javax.microedition.lcdui.*;
+import javax.microedition.lcdui.game.GameCanvas;
+
+// Это простой пример gamecanvas, который 
+// выводит летящие звезды. Кнопками вверх 
+// и вниз регулируется скорость полета
+
+public class StarField extends GameCanvas
+     implements Runnable {
+
+     private static final int SLEEP_INCREMENT = 10;
+     private static final int SLEEP_INITIAL = 150;
+     private static final int SLEEP_MAX = 300;
+
+     private Graphics graphics;
+     private Random random;
+     private int sleepTime = SLEEP_INITIAL;
+     private volatile Thread thread;
+
+     public StarField(){
+          super( true );
+
+          graphics = getGraphics();
+          graphics.setColor( 0, 0, 0 );
+          graphics.fillRect( 0, 0, getWidth(), getHeight() );
+     }
+
+     // Когда canvas переходит в режим "невидимый", удаляем thread 
+
+     protected void hideNotify(){
+          thread = null;
+     }
+
+     // Игровой цикл.
+
+     public void run(){
+          int w = getWidth();
+          int h = getHeight() - 1;
+
+          while( thread == Thread.currentThread() ){
+
+               // В зависимости от нажатой кнопки 
+               // увеличить или уменьшить скорость 
+               // полета
+
+               int state = getKeyStates();
+
+               if( ( state & DOWN_PRESSED ) != 0 ){
+                    sleepTime += SLEEP_INCREMENT;
+                    if( sleepTime > SLEEP_MAX ) 
+                         sleepTime = SLEEP_MAX;
+               } else if( ( state & UP_PRESSED ) != 0 ){
+                    sleepTime -= SLEEP_INCREMENT;
+                    if( sleepTime < 0 ) sleepTime = 0;
+               }
+               // Перерисовать экран, сдвинув существующее
+               // существующее звездное поле и нарисовав новые звезды
+
+               graphics.copyArea( 0, 0, w, h, 0, 1,
+               Graphics.TOP | Graphics.LEFT );
+
+               graphics.setColor( 0, 0, 0 );
+               graphics.drawLine( 0, 0, w, 0);
+               graphics.setColor( 255, 255, 255 );
+
+               for( int i = 0; i < w; ++i ){
+                    int test = Math.abs( random.nextInt() ) % 100;
+                    if( test < 4 ){
+                         graphics.drawLine( i, 0, i, 0 );
+                    }
+               }
+
+               flushGraphics();
+
+               // Ждем...
+
+               try {
+                    Thread.currentThread().sleep( sleepTime );
+               }
+               catch( InterruptedException e ){
+               }
+          }
+     }
+
+     // Когда canvas переходит в видимый режим,
+     // создаем поток thread и запускаем игровой цикл.
+
+     protected void showNotify(){
+          random = new Random();
+
+          thread = new Thread( this );
+          thread.start();
+     }
+}
+
+
+Пользователь нажимает кнопки UP и DOWN для увеличения и уменьшения скорости полета. Этот несложный пример может лечь в основу простой игры. GameCanvas позволяет создавать гибкие и чувствительные игры.

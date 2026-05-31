@@ -1,0 +1,64 @@
+﻿Что может узнать мидлет?  
+Автор: Mank
+ Дата публикации: 17.10.2003 12:24
+ 
+
+J2ME 
+  
+
+Появление данной статьи обязано форуму Juga.ru – Java в мобильнике и его участникам. СooperFeet - как отвечающему на вопросы, z0rr0 и poma как задающими вопросы. Статья представляет обзор методов различных классов MIDP 1.0 и CLDC 1.0, которые позволяют получить мидлету различную информацию о устройстве на котором запущен мидлет, о виртуальной машине, и некоторых других параметрах и возможностях системного окружения.  
+
+javax.microedition.midlet.MIDlet
+public final java.lang.String getAppProperty (java.lang.String key) – позволяет получить свойства из jad или из manifest.mf файла. Если свойства в jad файле имеют те же имена, что и manifest.mf файле, значения свойств будут браться из jad файла (MIDP 1.0). 
+
+java.lang.System
+
+public static long currentTimeMillis() – возвращает текущее время в миллисекундах, отсчитываемое с 1 января 1970 года. 
+public static java.lang.String getProperty (java.lang.String key) – возвращает системные свойства. Ниже представлены свойства определенные в MIDP 1.0: 
+
+microedition.configuration – содержит название и версию поддерживаемой устройством конфигурации, например "CLDC-1.0". 
+microedition.profiles – содержит названия набора профилей поддерживаемых устройством, например "MIDP-1.0". 
+microedition.platform – содержит название платформы. Например, телефон Siemens SL45i возвращает значение "SL45i", телефон Nokia 3410 возвращает значение "Nokia3410". Телефоны некоторых других производителей возвращают значение "j2me". 
+microedition.locale – содержит название текущей местной среды установленной на устройстве, например "ru-RU". 
+microedition.encoding – содержит название кодировки по умолчанию используемой платформой, например "ISO8859-1". 
+java.lang.Runtime
+
+public long freeMemory() – возвращает количество свободной памяти в системе. 
+public long totalMemory() – возвращает общее количество памяти доступное в JVM. 
+
+
+javax.microedition.lcdui.Display
+
+public boolean isColor() – возвращает true, если телефон поддерживает цвета, иначе false. 
+public int numColors() – возвращает количество предоставляемых цветов или поддерживаемое количество градаций серого цвета для черно-белых устройств. 
+
+
+javax.microedition.lcdui.Canvas
+
+public int getHieght – возвращает высоту экрана в пикселях. 
+public int getWidth() – возвращает ширину экрана в пикселях. 
+public boolean isDoubleBuffered() – возвращает true, если поддерживается двойная буфферизация. 
+public boolean hasRepeatEvents() – возвращает true, если устройство генерирует сообщения о повторном нажатии клавиш. То есть, если метод вернул true, это означает, что если пользователь нажмет, и будет удерживать клавишу, будут генерироваться сообщения о нажатии, и метод keyRepeated будет вызываться. 
+public boolean hasPointerEvents() – возвращает true, если устройство поддерживает pointer press and release events. 
+public boolean hasPointerMotionEvents() – возвращает true, если устройство поддерживает pointer motion events. 
+
+
+javax.microedition.lcdui.Font
+
+public static javax.microedition.lcdui.Font getDefaultFont() – возвращает текущий шрифт. 
+
+
+javax.microedition.rms.RecordStore
+
+public static java.lang.String[] listRecordStores() – возвращает список всех хранилищ записей (RecordStore), доступных набору мидлетов. 
+public int getSizeAvailable() – возвращает число оставшихся байтов, на которое хранилище записей может вырасти. 
+public int getSize() – возвращает количество байт, которое занимает хранилище записей (RecordStore). 
+public int getNumRecords() – возвращает количество записей в хранилище. 
+
+
+javax.microedition.io.Connector 
+
+public static javax.microedition.io.Connection open (java.lang.String name) throws IOException – чтобы определить поддерживает ли устройство данный сетевой протокол, существует только один стандартный способ определить это. Метод open будет генерировать ConnectionNotFoundException, в том случае если данный протокол не поддерживается. (Протокол указывается в универсальном идентификаторе ресурса URI, который передается в метод open). 
+
+Адрес оригинала: http://www.midlet.ru 
+ 
