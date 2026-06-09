@@ -1,14 +1,19 @@
 # J2ME Articles / Статьи по J2ME
 
-
-
-<img src="https://github.com/USoft-History/J2ME-Articles/blob/main/resources/images/logo.png" alt="Status">
-
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-J2ME%20%2F%20MIDP-orange?style=for-the-badge" alt="Platform J2ME">
   <img src="https://img.shields.io/badge/Language-Markdown%20%2F%20HTML-blue?style=for-the-badge" alt="Language">
   <img src="https://img.shields.io/badge/Status-Archived%20%2F%20Historical-red?style=for-the-badge" alt="Status">
 </p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Udfsoft.com-blue?style=for-the-badge" alt="Language">
+</p>
+
+---
+
+<img src="https://github.com/USoft-History/J2ME-Articles/blob/main/resources/images/logo.png" alt="Status">
+
 
 ---
 
@@ -56,6 +61,13 @@
 ## 🏛️ USoft History
 
 Данный проект является частью инициативы по сохранению истории мобильного софта и геймдева ушедшей эпохи. Если вам интересна эта тема, загляните в другие репозитории организации [USoft-History](https://github.com/USoft-History).
+
+## 🏛️ Источники
+
+[uBlog](https://blog.udfsoft.com/)
+
+
+[uSoft](https://udfsoft.com/)
 
 ---
 
