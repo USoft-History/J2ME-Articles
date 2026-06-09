@@ -1,5 +1,9 @@
 # J2ME Articles / Статьи по J2ME
 
+
+
+<img src="https://github.com/USoft-History/J2ME-Articles/blob/main/resources/images/logo.png" alt="Status">
+
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-J2ME%20%2F%20MIDP-orange?style=for-the-badge" alt="Platform J2ME">
   <img src="https://img.shields.io/badge/Language-Markdown%20%2F%20HTML-blue?style=for-the-badge" alt="Language">
