@@ -1,0 +1,119 @@
+Camera control using JSR 234 in Java Platform 7 (JP-7) phones
+
+
+Updated January 31, 2007.
+
+In Sony Ericsson Java Platform 7 (JP-7) phones such as the K610, K800 and W850, Advanced Multimedia Supplements (JSR 234) is supported. This gives the developer the possibility to control the camera.
+
+Using JSR 234 it's possible to:
+Zoom 
+Set the resolution 
+Sequential camera shooting 
+Control the light sensitivity 
+Set the camera in Macro mode
+
+Note that the functionality may differ between devices and brands so developers should make sure to check if a feature is enabled before using it.
+
+To create any of the controls supported by JSR 234, use the getControl method in the player class.
+
+Player player = Manager.createPlayer("capture://video");
+player.realize();
+CameraControl cc = (CameraControl) player.getControl("CameraControl");
+
+JSR 234 controls used for controlling the camera:
+CameraControl 
+ExposureControl 
+FlashControl 
+FocusControl 
+SnapshotControl 
+ZoomControl
+
+CameraControl
+The camera control can be used to set the video resolution or image resolution when taking an image with the snapshot control and it can be used to set the exposure mode. 
+
+String []exposure = cc.getSupportedExposureModes();
+Exposure: 
+
+These modes are supported on K800/K790:
+auto 
+portrait  (human face in the centre is the target) 
+landscape  (daylight landscape) 
+twilight_portrait 
+twilight_landscape 
+beach/snow  (high light situation) 
+sports  (fast moving targets) 
+document  (for copying texts and drawings, and for bar code reading)
+
+The resolution should be set to any of the index values returned by the getSupportedStillResolutions method.
+
+int []stillRes = cc.getSupportedStillResolutions();
+/* supported resolutions on k800/790
+[480, 640, 960, 1280, 1224, 1632, 1500, 2000, 1536, 2048]
+index: 
+0 - 640x480
+1 - 1280x960
+2 - 1632x1224
+3 - 2000x1500
+4 - 2048x1536
+*/
+cc.setStillResolution(2); // set to 1632x1224
+
+The following methods can be used to get the supported video resolutions and to set the resolution. 
+
+int []videoRes = getSupportedVideoResolutions();
+setVideoResolution(int index);
+
+The following method can be used to test if the shutter feedback can be changed.
+
+boolean shutterFeedbackChangeIsSupported = false;
+try{
+    cc.enableShutterFeedback(true);
+    shutterFeedbackChangeIsSupported = true;
+}catch(SecurityException e){
+}
+
+ExposureControl
+The exposure control can be used to set the ISO value and the exposure compensation. The exposure time is set to be in auto mode, hence it can't be changed.
+
+Use the following methods to find out the supported values:
+
+int []supportedIsos = ec.getSupportedISOs();
+int []supportedExposureCompensations =
+ec.getSupportedExposureCompensations();
+
+FlashControl
+The flash control is not supported.
+
+FocusControl
+Using the Focus Control it's possible to set the camera in Macro mode.
+
+setMacro(true);
+
+The camera will be set to use auto focus hence it's not possible to use manual focus.
+
+Note that the focus must be set explicitly by calling the method FocusControl.setFocus(FocusControl.AUTO) and this must be done for each focus attempt.
+
+To interrupt an ongoing focus attempt the method FocusControl.setFocus(FocusControl.AUTO_LOCK) can be called.
+
+SnapshotControl
+The snapshot control is used to take images with the camera. Sequential shooting is also supported, so it is possible to specify a number of images to be taken in a series of photos. The images will be saved to the file system and the default path is c:/pictures/. The path can be changed by using the function: setDirectory(java.lang.String directory)
+
+To name the file use the setPrefix() and set suffix() methods.
+
+setFilePrefix("myimage");
+setFileSuffix(".jpg");
+
+ZoomControl 
+The Zoom Control is supported on the K800 and K790 and up to 16x digital zoom is supported. The zoom values are set by using any of the supported levels:
+
+getDigitalZoom() // 100-1600
+getDigitalZoomLevels() // 151
+getMaxDigitalZoom() // 1600
+setDigitalZoom() // use (maxZoom-100)/(levels-1) to set a valid level.
+The following method can be used to see if digital zoom is supported on a phone:
+public boolean digitalZoomIsSupported(){
+    if(zc.getDigitalZoomLevels()==1){
+        return false;
+    }
+    return true;
+}
